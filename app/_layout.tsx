@@ -1,24 +1,56 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useEffect } from 'react';
+import { Provider } from 'react-redux';
+import { PersistGate } from 'redux-persist/integration/react';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { store, persistor } from '@/src/shared/store';
+import { colors } from '@/src/shared/core/constants/Theme';
+import { AuthStateListener } from '@/src/shared/components/auth/AuthStateListener';
+import { AppwriteAuth } from '@/src/shared/services/appwrite/auth';
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
-
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
+/**
+ * Loading component shown while Redux state is rehydrating
+ */
+function LoadingFallback() {
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color={colors.primaryDark} />
+    </View>
   );
 }
+
+export default function RootLayout() {
+  // Use AppwriteAuth wrapper if possible or just rely on AuthService initialization in Redux
+  // Doctor app did `AppwriteAuth.ping()` but we don't have that method in our static class yet.
+
+  return (
+    <Provider store={store}>
+      <PersistGate loading={<LoadingFallback />} persistor={persistor}>
+        <SafeAreaProvider>
+          <AuthStateListener>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                animation: 'fade',
+              }}
+            >
+              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+              <Stack.Screen name="(app)" options={{ headerShown: false }} />
+            </Stack>
+          </AuthStateListener>
+        </SafeAreaProvider>
+      </PersistGate>
+    </Provider>
+  );
+}
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.bgPrimary,
+  },
+});
