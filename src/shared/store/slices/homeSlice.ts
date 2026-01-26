@@ -6,7 +6,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import {
     HomeState,
-    User,
     WeightData,
     MealItem,
     WaterIntake,
@@ -20,7 +19,6 @@ import {
 // ============================================================================
 
 const initialState: HomeState = {
-    user: null,
     weightData: null,
     meals: [],
     waterIntake: { ...DEFAULT_WATER_INTAKE },
@@ -54,13 +52,6 @@ const homeSlice = createSlice({
         setError: (state, action: PayloadAction<string | null>) => {
             state.error = action.payload;
             state.isLoading = false;
-        },
-
-        /**
-         * Set user data
-         */
-        setUser: (state, action: PayloadAction<User | null>) => {
-            state.user = action.payload;
         },
 
         /**
@@ -123,14 +114,12 @@ const homeSlice = createSlice({
         setHomeData: (
             state,
             action: PayloadAction<{
-                user: User;
                 weightData: WeightData;
                 meals: MealItem[];
                 waterIntake: WaterIntake;
                 planProgress: PlanProgress;
             }>
         ) => {
-            state.user = action.payload.user;
             state.weightData = action.payload.weightData;
             state.meals = action.payload.meals;
             state.waterIntake = action.payload.waterIntake;
@@ -151,7 +140,6 @@ const homeSlice = createSlice({
 // Selectors
 // ============================================================================
 
-export const selectUser = (state: { home: HomeState }) => state.home.user;
 export const selectWeightData = (state: { home: HomeState }) => state.home.weightData;
 export const selectMeals = (state: { home: HomeState }) => state.home.meals;
 export const selectWaterIntake = (state: { home: HomeState }) => state.home.waterIntake;
@@ -184,7 +172,6 @@ export const selectPlanProgressPercent = (state: { home: HomeState }) => {
 export const {
     setLoading,
     setError,
-    setUser,
     setWeightData,
     setMeals,
     toggleMealCompletion,

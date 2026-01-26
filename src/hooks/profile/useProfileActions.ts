@@ -9,9 +9,10 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useAppDispatch } from '@/src/shared/store';
 import { clearProfile } from '@/src/shared/store/slices/profileSlice';
-import { deleteAccount } from '@/src/shared/store/slices/authSlice';
+import { resetAuth } from '@/src/shared/store/slices/authSlice';
 import { profileTranslations } from '@/src/shared/core/constants/translation';
 import { AppwriteAuth } from '@/src/shared/services/appwrite/auth';
+import { AuthService } from '@/src/shared/services/auth/auth.service';
 import { persistor } from '@/src/shared/store';
 
 /**
@@ -76,8 +77,15 @@ export function useProfileActions() {
                                     console.warn('No valid Appwrite session found, clearing local state only');
                                 }
 
-                                // Clear profile state
+                                // Clear all auth data completely
+                                await AuthService.logout();
+                                
+                                // Clear Redux state
                                 dispatch(clearProfile());
+                                dispatch(resetAuth());
+
+                                // Clear all persisted storage
+                                await persistor.purge();
 
                                 setIsLoggingOut(false);
 
@@ -143,8 +151,8 @@ export function useProfileActions() {
 
                                 // Clear all state
                                 dispatch(clearProfile());
-                                dispatch(deleteAccount()); // Clear auth state completely
-                                
+                                dispatch(resetAuth()); // Clear auth state completely
+
                                 // Clear all persisted storage
                                 await persistor.purge();
 

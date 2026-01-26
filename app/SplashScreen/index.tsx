@@ -170,12 +170,6 @@ export default function SplashScreenComponent() {
 
                 {/* Main content */}
                 <View style={styles.content}>
-                    {/* Tagline */}
-                    <Animated.View style={[styles.taglineContainer, taglineAnimatedStyle]}>
-                        <Text style={[styles.tagline, isRTL && styles.rtlText]}>
-                            {splashTranslations.tagline}
-                        </Text>
-                    </Animated.View>
 
                     {/* Logo */}
                     <Animated.View style={[styles.logoContainer, logoAnimatedStyle]}>
@@ -185,6 +179,14 @@ export default function SplashScreenComponent() {
                             resizeMode="contain"
                         />
                     </Animated.View>
+
+                                        {/* Tagline */}
+                    <Animated.View style={[styles.taglineContainer, taglineAnimatedStyle]}>
+                        <Text style={[styles.tagline, isRTL && styles.rtlText]}>
+                            {splashTranslations.tagline}
+                        </Text>
+                    </Animated.View>
+
                 </View>
 
                 {/* Loading indicator */}

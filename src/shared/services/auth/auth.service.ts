@@ -12,6 +12,8 @@ export interface User {
     status?: 'active' | 'pending' | 'rejected';
     avatarUrl?: string;
     onboardingCompleted: boolean;
+    healthProfileCompleted: boolean;
+    isFirstLogin: boolean;
     // Client specific fields
     height?: number;
     weight?: number;
@@ -155,6 +157,23 @@ export const AuthService = {
             await AsyncStorage.removeItem('token');
             await AsyncStorage.removeItem('user');
             return null;
+        }
+    },
+
+    // Refresh User Profile
+    refreshUser: async () => {
+        try {
+            const response = await api.get('/auth/me');
+            const payload = response.data as any;
+            const user = payload?.data ?? payload?.user ?? payload;
+            if (user) {
+                await AsyncStorage.setItem('user', JSON.stringify(user));
+                return user;
+            }
+            throw new Error('No user data returned');
+        } catch (error: any) {
+            console.error('Refresh user failed', error);
+            throw error;
         }
     }
 };

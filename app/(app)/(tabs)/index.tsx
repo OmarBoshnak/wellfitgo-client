@@ -3,7 +3,7 @@
  * @description Main home screen - clean orchestrator with modular components
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { StyleSheet, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -11,6 +11,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { colors } from '@/src/shared/core/constants/Theme';
 import { useHomeData } from '@/src/hooks/home';
+import { useAppSelector } from '@/src/shared/store';
 import {
     HomeHeader,
     WeightProgressCard,
@@ -26,6 +27,8 @@ import {
 export default function HomeScreen() {
     const router = useRouter();
     const [refreshing, setRefreshing] = useState(false);
+
+
 
     // Get all home data from custom hook
     const {
@@ -51,9 +54,8 @@ export default function HomeScreen() {
     }, []);
 
     const handleNotificationPress = useCallback(() => {
-        // TODO: Navigate to notifications
-        Alert.alert('الإشعارات', 'سيتم فتح الإشعارات قريباً');
-    }, []);
+        router.push('/(app)/notifications');
+    }, [router]);
 
     const handleViewWeightDetails = useCallback(() => {
         // TODO: Navigate to weight details
@@ -103,8 +105,8 @@ export default function HomeScreen() {
             >
                 {/* Header */}
                 <HomeHeader
-                    userName={user?.nameAr || 'مستخدم'}
-                    userAvatar={user?.avatar}
+                    userName={user ? `${user.firstName} ${user.lastName}` : 'مستخدم'}
+                    userAvatar={user?.avatarUrl}
                     greeting={greeting}
                     onProfilePress={handleProfilePress}
                     onNotificationPress={handleNotificationPress}

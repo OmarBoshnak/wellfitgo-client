@@ -1,0 +1,68 @@
+import { Notification } from './types';
+
+export const mockNotifications: Notification[] = [
+  {
+    id: '1',
+    title: 'Appointment Reminder',
+    message: 'Your appointment with Dr. Smith is scheduled for tomorrow at 2:00 PM. Please arrive 15 minutes early.',
+    time: '2h ago',
+    isRead: false,
+    type: 'appointment',
+  },
+  {
+    id: '2',
+    title: 'New Message',
+    message: 'You have a new message from your healthcare provider regarding your recent test results.',
+    time: '4h ago',
+    isRead: false,
+    type: 'message',
+  },
+  {
+    id: '3',
+    title: 'Health Tip',
+    message: 'Remember to stay hydrated! Aim for at least 8 glasses of water today for optimal health.',
+    time: '6h ago',
+    isRead: true,
+    type: 'health',
+  },
+  {
+    id: '4',
+    title: 'System Update',
+    message: 'The app has been updated with new features. Check out the improved health tracking dashboard.',
+    time: '1d ago',
+    isRead: true,
+    type: 'system',
+  },
+  {
+    id: '5',
+    title: 'Appointment Confirmed',
+    message: 'Your appointment for next week has been confirmed. You can view details in your calendar.',
+    time: '2d ago',
+    isRead: true,
+    type: 'appointment',
+  },
+  {
+    id: '6',
+    title: 'Medication Reminder',
+    message: 'Time to take your daily medication. Please mark as taken once completed.',
+    time: '3d ago',
+    isRead: true,
+    type: 'health',
+  },
+  {
+    id: '7',
+    title: 'Lab Results Available',
+    message: 'Your recent lab results are now available. Please review them and contact your doctor if you have questions.',
+    time: '4d ago',
+    isRead: true,
+    type: 'general',
+  },
+  {
+    id: '8',
+    title: 'Welcome to WellFitGo',
+    message: 'Thank you for joining WellFitGo! Start your health journey by completing your profile.',
+    time: '1w ago',
+    isRead: true,
+    type: 'system',
+  },
+];

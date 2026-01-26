@@ -22,7 +22,7 @@ export type HeightUnit = 'cm' | 'ft';
 export type WeightUnit = 'kg' | 'lb';
 
 /** Fitness goal options */
-export type FitnessGoal = 'lose_weight' | 'gain_muscle' | 'maintain' | 'improve_health';
+export type FitnessGoal = 'weight_loss' | 'gain_muscle' | 'maintain' | 'improve_health';
 
 /** Common medical conditions */
 export const MEDICAL_CONDITIONS = [

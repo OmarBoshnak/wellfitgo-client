@@ -48,6 +48,12 @@ function FreeCallBanner({
                 end={{ x: 1, y: 1 }}
                 style={styles.gradient}
             >
+
+                <View style={styles.textContainer}>
+                    <Text style={styles.mainText}>{text}</Text>
+                    <Text style={styles.subText}>{subtext}</Text>
+                </View>
+
                 <View style={styles.iconContainer}>
                     <LinearGradient
                         colors={gradients.primary}
@@ -59,11 +65,6 @@ function FreeCallBanner({
                             color={colors.white}
                         />
                     </LinearGradient>
-                </View>
-
-                <View style={styles.textContainer}>
-                    <Text style={styles.mainText}>{text}</Text>
-                    <Text style={styles.subText}>{subtext}</Text>
                 </View>
 
                 {/* Decorative sparkle */}
@@ -111,14 +112,14 @@ const styles = StyleSheet.create({
         fontSize: ScaleFontSize(16),
         fontWeight: '700',
         color: colors.primaryDark,
-        writingDirection: 'rtl',
         marginBottom: verticalScale(2),
+        textAlign: 'right'
     },
     subText: {
         fontSize: ScaleFontSize(13),
         color: colors.textSecondary,
-        writingDirection: 'rtl',
         lineHeight: ScaleFontSize(18),
+        textAlign: 'right'
     },
     sparkle: {
         position: 'absolute',

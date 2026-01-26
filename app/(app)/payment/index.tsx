@@ -323,8 +323,8 @@ const styles = StyleSheet.create({
         fontSize: ScaleFontSize(16),
         fontWeight: '700',
         color: colors.textPrimary,
-        writingDirection: 'rtl',
         marginBottom: verticalScale(12),
+        textAlign: 'right'
     },
     addNewCardButton: {
         backgroundColor: colors.white,
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
         borderWidth: 2,
     },
     addNewCardContent: {
-        flexDirection: 'row',
+        flexDirection: 'row-reverse',
         alignItems: 'center',
         padding: horizontalScale(14),
         gap: horizontalScale(12),

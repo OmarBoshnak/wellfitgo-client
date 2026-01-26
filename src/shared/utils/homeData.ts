@@ -4,7 +4,6 @@
  */
 
 import {
-    User,
     WeightData,
     WeightEntry,
     MealItem,
@@ -15,18 +14,6 @@ import {
     DEFAULT_PLAN_PROGRESS,
 } from '@/src/shared/types/home';
 
-// ============================================================================
-// Mock User
-// ============================================================================
-
-export const mockUser: User = {
-    id: 'user_001',
-    name: 'Omar Ahmed',
-    nameAr: 'عمر أحمد',
-    email: 'omar@example.com',
-    avatar: undefined,
-    createdAt: Date.now() - 30 * 24 * 60 * 60 * 1000, // 30 days ago
-};
 
 // ============================================================================
 // Mock Weight Data
@@ -160,7 +147,6 @@ export const computeMockNutrition = (meals: MealItem[]): DailyNutrition => {
  * Simulate fetching home data
  */
 export async function fetchMockHomeData(delayMs: number = 800): Promise<{
-    user: User;
     weightData: WeightData;
     meals: MealItem[];
     waterIntake: WaterIntake;
@@ -169,7 +155,6 @@ export async function fetchMockHomeData(delayMs: number = 800): Promise<{
     return new Promise((resolve) => {
         setTimeout(() => {
             resolve({
-                user: mockUser,
                 weightData: {
                     ...mockWeightData,
                     history: generateWeeklyWeightData(),

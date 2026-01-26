@@ -27,7 +27,7 @@ import { FitnessGoal, GoalOption } from '@/src/shared/types/health';
 /** Goal options with Arabic labels and icons */
 const GOAL_OPTIONS: GoalOption[] = [
     {
-        value: 'lose_weight',
+        value: 'weight_loss',
         labelAr: 'إنقاص الوزن',
         labelEn: 'Lose Weight',
         icon: 'trending-down',
@@ -221,8 +221,8 @@ const styles = StyleSheet.create({
         fontSize: ScaleFontSize(16),
         fontWeight: '600',
         color: colors.textPrimary,
-        writingDirection: 'rtl',
         marginBottom: verticalScale(12),
+        textAlign: 'right'
     },
     optionsContainer: {
         gap: verticalScale(12),

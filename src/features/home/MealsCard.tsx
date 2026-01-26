@@ -153,12 +153,12 @@ function MealsCard({
                         accessibilityLabel="عرض كل الوجبات"
                         style={styles.viewAllButton}
                     >
-                        <Text style={styles.viewAllText}>عرض الكل</Text>
                         <Ionicons
                             name="chevron-back"
                             size={horizontalScale(16)}
                             color={colors.primaryDark}
                         />
+                        <Text style={styles.viewAllText}>عرض الكل</Text>
                     </Pressable>
                 </View>
 

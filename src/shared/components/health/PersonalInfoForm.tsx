@@ -206,8 +206,8 @@ const styles = StyleSheet.create({
         fontSize: ScaleFontSize(14),
         fontWeight: '600',
         color: colors.textPrimary,
-        writingDirection: 'rtl',
         marginBottom: verticalScale(8),
+        textAlign: 'right'
     },
     inputContainer: {
         backgroundColor: colors.white,
@@ -219,7 +219,6 @@ const styles = StyleSheet.create({
     textInput: {
         fontSize: ScaleFontSize(16),
         color: colors.textPrimary,
-        writingDirection: 'rtl',
         textAlign: 'right',
     },
     errorContainer: {

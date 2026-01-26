@@ -190,6 +190,7 @@ export default function HeightSelector({
 
             {/* Input */}
             <View style={[styles.inputContainer, error && styles.inputContainerError]}>
+                                <Text style={styles.unitLabel}>{unit === 'cm' ? 'سم' : 'قدم'}</Text>
                 <TextInput
                     style={styles.input}
                     value={inputValue}
@@ -199,7 +200,6 @@ export default function HeightSelector({
                     placeholderTextColor={colors.textSecondary}
                     accessibilityLabel={`الطول بـ ${unit === 'cm' ? 'السنتيمتر' : 'القدم'}`}
                 />
-                <Text style={styles.unitLabel}>{unit === 'cm' ? 'سم' : 'قدم'}</Text>
             </View>
 
             {/* Slider */}

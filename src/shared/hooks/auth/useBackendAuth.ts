@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useAppDispatch, useAppSelector } from '@/src/shared/store';
-import { selectUser } from '@/src/shared/store/slices/authSlice';
+import { selectUser } from '@/src/shared/store/selectors/auth.selectors';
 import { AuthService } from '@/src/shared/services/auth/auth.service';
 import { RoutingDecision } from '@/src/shared/services/backend/api';
 

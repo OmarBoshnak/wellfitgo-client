@@ -13,7 +13,7 @@ import {
     selectHasCompletedOnboarding,
     selectHasCompletedHealthHistory,
     selectRole,
-} from '@/src/shared/store/slices/authSlice';
+} from '@/src/shared/store/selectors/auth.selectors';
 import { NavigationDecision, AuthNavigationDestination } from '@/src/shared/types/auth';
 
 // ============================================================================
@@ -54,8 +54,8 @@ export function useAuthState() {
      * Whether user needs to complete health history
      */
     const needsHealthHistory = useMemo(() => {
-        return isAuthenticated && isFirstTimeUser && !hasCompletedHealthHistory;
-    }, [isAuthenticated, isFirstTimeUser, hasCompletedHealthHistory]);
+        return isAuthenticated && !hasCompletedHealthHistory;
+    }, [isAuthenticated, hasCompletedHealthHistory]);
 
     /**
      * Determine where to navigate after splash screen
@@ -66,28 +66,26 @@ export function useAuthState() {
             return { destination: 'splash', reason: 'Waiting for state hydration' };
         }
 
-        // Authenticated user
-        if (isAuthenticated) {
-            // First time user needs health history
-            if (isFirstTimeUser && !hasCompletedHealthHistory) {
-                return { destination: 'healthHistory', reason: 'First-time user needs health history' };
-            }
-            // Returning user goes to home
-            return { destination: 'clientHome', reason: 'Authenticated user' };
+        // Onboarding has the highest priority before login
+        if (!hasCompletedOnboarding) {
+            return { destination: 'onboarding', reason: 'Onboarding not completed' };
         }
 
         // Not authenticated
-        if (hasCompletedOnboarding) {
-            // Already saw onboarding, go to login
-            return { destination: 'login', reason: 'Returning unauthenticated user' };
+        if (!isAuthenticated) {
+            return { destination: 'login', reason: 'User needs to log in' };
         }
 
-        // Fresh install, show onboarding
-        return { destination: 'onboarding', reason: 'First-time app launch' };
+        // Authenticated but health history incomplete
+        if (!hasCompletedHealthHistory) {
+            return { destination: 'healthHistory', reason: 'Health history incomplete' };
+        }
+
+        // Returning user goes to home
+        return { destination: 'clientHome', reason: 'Authenticated user' };
     }, [
         isHydrated,
         isAuthenticated,
-        isFirstTimeUser,
         hasCompletedOnboarding,
         hasCompletedHealthHistory,
         role,
@@ -97,11 +95,11 @@ export function useAuthState() {
      * Determine where to navigate after login success
      */
     const getPostLoginDestination = useMemo((): NavigationDecision => {
-        if (isFirstTimeUser || !hasCompletedHealthHistory) {
-            return { destination: 'healthHistory', reason: 'First-time user needs health history' };
+        if (!hasCompletedHealthHistory) {
+            return { destination: 'healthHistory', reason: 'Health history incomplete' };
         }
         return { destination: 'clientHome', reason: 'Returning user' };
-    }, [isFirstTimeUser, hasCompletedHealthHistory]);
+    }, [hasCompletedHealthHistory]);
 
     // ========================================================================
     // Return

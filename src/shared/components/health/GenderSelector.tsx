@@ -185,14 +185,14 @@ export default function GenderSelector({
 const styles = StyleSheet.create({
     container: {
         width: '100%',
-        marginBottom: verticalScale(20),
+        marginVertical: verticalScale(20),
     },
     label: {
         fontSize: ScaleFontSize(16),
         fontWeight: '600',
         color: colors.textPrimary,
-        writingDirection: 'rtl',
         marginBottom: verticalScale(12),
+        textAlign: 'right'
     },
     optionsContainer: {
         flexDirection: 'row',

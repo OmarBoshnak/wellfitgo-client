@@ -115,29 +115,16 @@ function SubscriptionFooter({
                         <ActivityIndicator color={colors.white} size="small" />
                     ) : (
                         <>
-                            <Text style={styles.buttonText}>{buttonText}</Text>
                             <Ionicons
                                 name="arrow-back"
                                 size={horizontalScale(20)}
                                 color={colors.white}
                             />
+                            <Text style={styles.buttonText}>{buttonText}</Text>
                         </>
                     )}
                 </LinearGradient>
             </AnimatedTouchable>
-
-            {/* Skip link */}
-            {onSkip && (
-                <Pressable
-                    onPress={handleSkip}
-                    style={styles.skipButton}
-                    accessibilityRole="button"
-                    accessibilityLabel="تخطي"
-                >
-                    <Text style={styles.skipText}>تخطي الآن</Text>
-                </Pressable>
-            )}
-
             {/* Terms and Privacy */}
             <View style={styles.termsRow}>
                 <Text style={styles.termsText}>

@@ -14,6 +14,40 @@ export interface BackendResponse {
   error?: string;
 }
 
+export interface ClientProfileResponse {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  avatarUrl?: string;
+  gender?: string;
+  age?: number;
+  height?: number;
+  currentWeight?: number;
+  targetWeight?: number;
+  startingWeight?: number;
+  weightHistory?: {
+    date: string;
+    weight: number;
+    timestamp: number;
+  }[];
+  goal?: string;
+  activityLevel?: string;
+  onboardingCompleted?: boolean;
+  healthProfileCompleted?: boolean;
+  subscriptionStatus?: string;
+}
+
+export interface IdealWeightResponse {
+  idealWeightKg?: number;
+  healthyWeightRangeKg?: {
+    min: number;
+    max: number;
+  };
+  message?: string;
+  error?: string;
+}
+
 // ============================================================================
 // Enhanced Auth Types
 // ============================================================================
@@ -86,7 +120,31 @@ export const apiCall = async (
       headers,
     });
 
-    const data = await response.json();
+    // Check if response is HTML (error page) instead of JSON
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('text/html')) {
+      const text = await response.text();
+      console.error('[Backend API] Received HTML instead of JSON:', text.substring(0, 200));
+      throw new Error(`Server returned HTML error page (status: ${response.status})`);
+    }
+
+    // Handle empty response
+    const responseText = await response.text();
+    if (!responseText) {
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      return {};
+    }
+
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('[Backend API] JSON parse error:', parseError);
+      console.error('[Backend API] Response text:', responseText.substring(0, 200));
+      throw new Error(`Invalid JSON response from server: ${(parseError as Error).message}`);
+    }
 
     // Handle force logout scenario
     if (response.status === 401 && data.forceLogout) {
@@ -106,6 +164,12 @@ export const apiCall = async (
         forceLogout: true,
         redirectTo: 'login'
       };
+    }
+
+    // Handle other 401 errors (token expired, invalid, etc.)
+    if (response.status === 401) {
+      console.error('[Backend API] Authentication failed (401):', data);
+      throw new Error(data.message || data.error || 'Authentication failed - please log in again');
     }
 
     if (!response.ok) {
@@ -214,6 +278,108 @@ export const deleteAccount = async (
   }, token);
 };
 
+/**
+ * Save user health profile
+ */
+export const saveHealthProfile = async (
+  data: Record<string, any>,
+  token?: string
+): Promise<BackendResponse> => {
+  return apiCall('/api/auth/health-profile', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }, token);
+};
+
+// ============================================================================
+// Doctor & Booking APIs
+// ============================================================================
+
+/**
+ * Get available doctors
+ */
+export const getAvailableDoctors = async (token?: string): Promise<BackendResponse> => {
+  return apiCall('/api/patient/doctors', {}, token);
+};
+
+/**
+ * Book a consultation call
+ */
+export const bookConsultationCall = async (
+  data: {
+    doctorId: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    notes?: string;
+  },
+  token?: string
+): Promise<BackendResponse> => {
+  return apiCall('/api/patient/appointments', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }, token);
+};
+
+/**
+ * Assign a doctor to a client for chat
+ */
+export const assignChatDoctor = async (
+  clientId: string,
+  doctorId: string,
+  token?: string
+): Promise<BackendResponse> => {
+  return apiCall('/api/patient/assign-doctor', {
+    method: 'POST',
+    body: JSON.stringify({ clientId, doctorId }),
+  }, token);
+};
+
+/**
+ * Update client profile (self)
+ */
+export const updateClientProfile = async (
+  data: Record<string, any>,
+  token?: string
+): Promise<BackendResponse> => {
+  return apiCall('/api/clients/profile', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }, token);
+};
+
+/**
+ * Get client profile (self)
+ */
+export const getClientProfile = async (
+  token?: string
+): Promise<ClientProfileResponse> => {
+  return apiCall('/api/clients/profile', {}, token) as Promise<ClientProfileResponse>;
+};
+
+/**
+ * Get ideal weight for current client (based on height)
+ */
+export const getIdealWeight = async (
+  token?: string
+): Promise<IdealWeightResponse> => {
+  return apiCall('/api/clients/ideal-weight', {}, token) as Promise<IdealWeightResponse>;
+};
+
+/**
+ * Update user profile
+ */
+export const updateUser = async (
+  userId: string,
+  data: Record<string, any>,
+  token?: string
+): Promise<BackendResponse> => {
+  return apiCall(`/api/users/${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }, token);
+};
+
 export default {
   apiCall,
   enhancedSync,
@@ -223,5 +389,13 @@ export default {
   completeSetup,
   updateUserRole,
   deleteAccount,
+  saveHealthProfile,
+  getAvailableDoctors,
+  bookConsultationCall,
+  assignChatDoctor,
+  updateUser,
+  updateClientProfile,
+  getClientProfile,
 };
+
 

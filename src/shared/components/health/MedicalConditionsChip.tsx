@@ -206,14 +206,15 @@ const styles = StyleSheet.create({
         fontSize: ScaleFontSize(16),
         fontWeight: '600',
         color: colors.textPrimary,
-        writingDirection: 'rtl',
         marginBottom: verticalScale(4),
+        textAlign: 'right'
     },
     hint: {
         fontSize: ScaleFontSize(13),
         color: colors.textSecondary,
-        writingDirection: 'rtl',
         marginBottom: verticalScale(12),
+        textAlign: 'right'
+
     },
     chipsContainer: {
         flexDirection: 'row-reverse',

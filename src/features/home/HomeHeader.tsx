@@ -16,6 +16,7 @@ import Animated, {
 
 import { colors } from '@/src/shared/core/constants/Theme';
 import { horizontalScale, verticalScale, ScaleFontSize } from '@/src/shared/core/utils/scaling';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface HomeHeaderProps {
     /** User name to display */
@@ -42,6 +43,7 @@ function HomeHeader({
 }: HomeHeaderProps) {
     const avatarScale = useSharedValue(1);
     const notifScale = useSharedValue(1);
+    const insets = useSafeAreaInsets()
 
     const handleAvatarPressIn = useCallback(() => {
         avatarScale.value = withSpring(0.95);
@@ -79,10 +81,10 @@ function HomeHeader({
     return (
         <Animated.View
             entering={FadeInDown.duration(400)}
-            style={styles.container}
-        >           
-        
-         {/* Right side - Actions */}
+            style={[styles.container,{paddingTop: insets.top}]}
+        >
+
+            {/* Right side - Actions */}
             <View style={styles.actionsContainer}>
                 {/* Notifications */}
                 {onNotificationPress && (
@@ -106,11 +108,11 @@ function HomeHeader({
                     </Pressable>
                 )}
 
-            {/* Left side - Greeting */}
-            <View style={styles.greetingContainer}>
-                <Text style={styles.greeting}>{greeting}</Text>
-                <Text style={styles.userName}>{userName}</Text>
-            </View>
+                {/* Left side - Greeting */}
+                <View style={styles.greetingContainer}>
+                    <Text style={styles.greeting}>{greeting}</Text>
+                    <Text style={styles.userName}>{userName}</Text>
+                </View>
 
 
                 {/* Avatar */}
@@ -121,6 +123,7 @@ function HomeHeader({
                     accessibilityRole="button"
                     accessibilityLabel={`الملف الشخصي لـ ${userName}`}
                     style={styles.avatarButton}
+                    disabled
                 >
                     <Animated.View style={[styles.avatarContainer, animatedAvatarStyle]}>
                         {userAvatar ? (

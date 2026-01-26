@@ -58,7 +58,7 @@ const PlanBadge = memo(function PlanBadge({
                     color={colors.white}
                 />
                 <Text style={styles.badgeText}>
-                    {isBestValue ? 'أفضل قيمة' : 'الأكثر شعبية'}
+                    {isBestValue ? 'أفضل قيمة' : 'الأكثر اختيارا '}
                 </Text>
             </LinearGradient>
         </View>
@@ -156,24 +156,23 @@ function PlanCard({ plan, isSelected, onSelect }: PlanCardProps) {
                                 />
                             </Animated.View>
                         </Animated.View>
-
-                        {/* Plan info */}
-                        <View style={styles.planInfo}>
-                            <Text style={styles.planName}>{plan.nameAr}</Text>
-                            {hasSavings && (
-                                <View style={styles.savingsBadge}>
-                                    <Text style={styles.savingsText}>{plan.savingsAr}</Text>
-                                </View>
-                            )}
-                        </View>
                     </View>
 
                     {/* Right side - Pricing */}
                     <View style={styles.rightSection}>
                         <View style={styles.priceRow}>
-                            <Text style={styles.price}>{plan.price}</Text>
+                            {hasSavings && (
+                                <View style={styles.savingsBadge}>
+                                    <Text style={styles.savingsText}>{plan.savingsAr}</Text>
+                                </View>
+                            )}
+
                             <Text style={styles.currency}>{plan.currencyAr}</Text>
+                            <Text style={styles.price}>{plan.price}</Text>
+                            {/* Plan info */}
+                            <Text style={styles.planName}>{plan.nameAr}</Text>
                         </View>
+
                         {plan.originalPrice && (
                             <Text style={styles.originalPrice}>
                                 {plan.originalPrice} {plan.currencyAr}
@@ -241,7 +240,9 @@ const styles = StyleSheet.create({
         height: '100%',
     },
     planInfo: {
+        flexDirection: 'row',
         gap: verticalScale(4),
+        alignItems: 'center',
     },
     planName: {
         fontSize: ScaleFontSize(17),
@@ -254,7 +255,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: horizontalScale(8),
         paddingVertical: verticalScale(2),
         borderRadius: horizontalScale(4),
-        alignSelf: 'flex-start',
+        alignSelf: 'baseline',
     },
     savingsText: {
         fontSize: ScaleFontSize(11),

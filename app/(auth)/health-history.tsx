@@ -41,8 +41,10 @@ import {
     selectHealthProgress,
     selectHealthCurrentStep,
 } from '@/src/shared/store/slices/healthSlice';
+import { selectToken } from '@/src/shared/store/selectors/auth.selectors';
 import { completeHealthHistory } from '@/src/shared/store/slices/authSlice';
 import * as asyncStorage from '@/src/shared/services/storage/asyncStorage';
+import api from '@/src/shared/services/backend/api';
 
 // Components
 import {
@@ -81,6 +83,7 @@ export default function HealthHistoryScreen() {
     const validation = useAppSelector(selectHealthValidation);
     const progress = useAppSelector(selectHealthProgress);
     const currentStep = useAppSelector(selectHealthCurrentStep);
+    const token = useAppSelector(selectToken);
 
     // Local state
     const [showErrorSummary, setShowErrorSummary] = useState(false);
@@ -252,17 +255,30 @@ export default function HealthHistoryScreen() {
             return;
         }
 
+        if (!token) {
+            Alert.alert('خطأ', 'لم يتم العثور على رمز المصادقة. يرجى تسجيل الدخول مرة أخرى.');
+            return;
+        }
+
         setIsSubmitting(true);
         setShowErrorSummary(false);
 
         try {
-            // TODO: Replace with actual API call when backend is ready
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Check if we have a token (we should)
+            // In a real app, getting the token might need a selector or storage access
+            // Here we assume the interceptor or stored token is handled by the api service
+            const response = await api.saveHealthProfile(formData, token);
+
+            if (!response.success) {
+                throw new Error(response.message || 'Failed to save profile');
+            }
 
             // Mark health history as completed in Redux and storage
+            console.log('Health profile saved successfully, updating completion status...');
             dispatch(completeHealthHistory());
             await asyncStorage.setHealthHistoryCompleted();
             await asyncStorage.setNotFirstTimeUser();
+            console.log('Health history completion status updated');
 
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             Alert.alert(
@@ -272,14 +288,16 @@ export default function HealthHistoryScreen() {
                     {
                         text: 'متابعة',
                         onPress: () => {
-                            // Navigate to Home
-                            router.replace('/(app)/(tabs)/index' as never);
+                            // Navigate to subscription after health history
+                            console.log('Navigating to subscription screen');
+                            router.replace('/(auth)/book-call' as never);
                         },
                     },
                 ]
             );
         } catch (error) {
-            Alert.alert('خطأ', 'حدث خطأ أثناء حفظ البيانات. حاول مرة أخرى.');
+            console.error('Submit health profile error:', error);
+            Alert.alert('خطأ', (error as Error).message || 'حدث خطأ أثناء حفظ البيانات. حاول مرة أخرى.');
         } finally {
             setIsSubmitting(false);
         }
@@ -489,15 +507,15 @@ const styles = StyleSheet.create({
         fontSize: ScaleFontSize(24),
         fontWeight: '700',
         color: colors.textPrimary,
-        writingDirection: 'rtl',
         marginBottom: verticalScale(8),
+        textAlign: 'right',
     },
     stepSubtitle: {
         fontSize: ScaleFontSize(15),
         color: colors.textSecondary,
-        writingDirection: 'rtl',
         marginBottom: verticalScale(24),
         lineHeight: ScaleFontSize(22),
+        textAlign: 'right',
     },
     bottomSpacer: {
         height: verticalScale(100),

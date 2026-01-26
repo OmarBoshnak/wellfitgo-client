@@ -68,22 +68,34 @@ export default function PhoneVerificationScreen() {
         try {
             const { user, token, routing } = await AuthService.verifyOtp(userId, value);
 
+            // Debug logging
+            console.log('Phone Verification Response:', { user, routing });
+            console.log('User onboardingCompleted:', user.onboardingCompleted);
+            console.log('User healthProfileCompleted:', user.healthProfileCompleted);
+            console.log('Routing destination:', routing?.destination);
+
             // Dispatch to Redux store
             dispatch(setCredentials({ user, token }));
 
             Alert.alert('نجاح', 'تم التحقق بنجاح');
 
-            // Handle routing similar to Doctor app or default to client home
-            if (user.status === 'pending' || !user.status) {
+            // Handle routing - check backend routing first, then user status
+            if (routing && routing.destination) {
+                // Backend determines routing (healthhistory for first-time, clientHome for returning)
+                router.replace(routing.destination as any);
+            } else if (user.status === 'pending' || !user.status) {
                 // router.replace('/(auth)/approval-pending');
                 router.replace('/(app)/(tabs)');
             } else if (user.status === 'rejected') {
                 Alert.alert('تنبيه', 'تم رفض طلب حسابك. يرجى الاتصال بالدعم.');
                 await AuthService.logout();
-            } else if (routing && routing.destination) {
-                router.replace(routing.destination as any);
             } else {
-                router.replace('/(app)/(tabs)');
+                // Default fallback - check if first time or health profile incomplete
+                if (user.isFirstLogin || !user.healthProfileCompleted) {
+                    router.replace('/(auth)/health-history');
+                } else {
+                    router.replace('/(app)/(tabs)');
+                }
             }
 
         } catch (error: any) {

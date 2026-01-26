@@ -59,6 +59,12 @@ function PaymentHeader({
     return (
         <View style={styles.container}>
             <View style={styles.topRow}>
+                {/* Spacer for alignment */}
+                <View style={styles.spacer} />
+
+                {/* Title */}
+                <Text style={styles.title}>{title}</Text>
+
                 {/* Back button */}
                 <Pressable
                     onPress={handleBack}
@@ -77,11 +83,6 @@ function PaymentHeader({
                     </Animated.View>
                 </Pressable>
 
-                {/* Title */}
-                <Text style={styles.title}>{title}</Text>
-
-                {/* Spacer for alignment */}
-                <View style={styles.spacer} />
             </View>
 
             {/* Amount display */}

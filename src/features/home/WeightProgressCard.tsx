@@ -3,7 +3,7 @@
  * @description Card displaying weight progress with ring and chart
  */
 
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -20,6 +20,7 @@ import { horizontalScale, verticalScale, ScaleFontSize } from '@/src/shared/core
 import { WeightProgress } from '@/src/shared/types/home';
 import ProgressRing from './ProgressRing';
 import WeightChart from './WeightChart';
+import WeightCheckin from './WeightCheckin';
 
 interface WeightProgressCardProps {
     /** Weight progress data */
@@ -38,6 +39,7 @@ function WeightProgressCard({
     onViewDetails,
     isLoading = false,
 }: WeightProgressCardProps) {
+    const [showWeightCheckin, setShowWeightCheckin] = useState(false);
     const buttonScale = useSharedValue(1);
 
     const handlePressIn = useCallback(() => {
@@ -52,6 +54,19 @@ function WeightProgressCard({
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onViewDetails();
     }, [onViewDetails]);
+
+    const handleWeightCheckinPress = useCallback(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setShowWeightCheckin(true);
+    }, []);
+
+    const handleWeightCheckinClose = useCallback(() => {
+        setShowWeightCheckin(false);
+    }, []);
+
+    const handleWeightCheckinComplete = useCallback(() => {
+        setShowWeightCheckin(false);
+    }, []);
 
     const animatedButtonStyle = useAnimatedStyle(() => ({
         transform: [{ scale: buttonScale.value }],
@@ -166,21 +181,39 @@ function WeightProgressCard({
                     </View>
 
                     {/* CTA Button */}
-                    <LinearGradient
-                        colors={gradients.primary}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.ctaButton}
+                    <Pressable
+                        onPress={handleWeightCheckinPress}
+                        onPressIn={handlePressIn}
+                        onPressOut={handlePressOut}
+                        accessibilityRole="button"
+                        accessibilityLabel="تسجيل وزن جديد"
                     >
-                        <Text style={styles.ctaText}>تسجيل وزن جديد</Text>
-                        <Ionicons
-                            name="add-circle-outline"
-                            size={horizontalScale(20)}
-                            color={colors.white}
-                        />
-                    </LinearGradient>
+                        <Animated.View style={[styles.ctaButton, animatedButtonStyle]}>
+                            <LinearGradient
+                                colors={gradients.primary}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={styles.ctaButtonGradient}
+                            >
+                                <Text style={styles.ctaText}>تسجيل وزن جديد</Text>
+                                <Ionicons
+                                    name="add-circle-outline"
+                                    size={horizontalScale(20)}
+                                    color={colors.white}
+                                />
+                            </LinearGradient>
+                        </Animated.View>
+                    </Pressable>
                 </Animated.View>
             </Pressable>
+            
+            {/* WeightCheckin Modal */}
+            <WeightCheckin
+                visible={showWeightCheckin}
+                onClose={handleWeightCheckinClose}
+                onComplete={handleWeightCheckinComplete}
+                isRTL={true}
+            />
         </Animated.View>
     );
 }
@@ -284,11 +317,15 @@ const styles = StyleSheet.create({
         marginBottom: verticalScale(8),
     },
     ctaButton: {
+        borderRadius: horizontalScale(12),
+        overflow: 'hidden',
+    },
+    ctaButtonGradient: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: verticalScale(12),
-        borderRadius: horizontalScale(12),
+        paddingHorizontal: horizontalScale(16),
         gap: horizontalScale(8),
     },
     ctaText: {

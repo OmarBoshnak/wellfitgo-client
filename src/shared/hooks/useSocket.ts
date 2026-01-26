@@ -7,7 +7,8 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import socketService, { SocketEvents } from '@/src/shared/services/socket/socketService';
 import { useAppDispatch, useAppSelector } from '@/src/shared/store';
-import { logout as logoutAction, selectUser, selectRole } from '@/src/shared/store/slices/authSlice';
+import { logout as logoutAction } from '@/src/shared/store/slices/authSlice';
+import { selectUser, selectRole } from '@/src/shared/store/selectors/auth.selectors';
 
 export const useSocket = () => {
   const user = useAppSelector(selectUser);

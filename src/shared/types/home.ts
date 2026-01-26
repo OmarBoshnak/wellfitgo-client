@@ -3,18 +3,6 @@
  * @description TypeScript interfaces for HomeScreen data
  */
 
-// ============================================================================
-// User Types
-// ============================================================================
-
-export interface User {
-    id: string;
-    name: string;
-    nameAr: string;
-    email?: string;
-    avatar?: string;
-    createdAt: number;
-}
 
 // ============================================================================
 // Weight Types
@@ -107,7 +95,6 @@ export interface QuickAction {
 // ============================================================================
 
 export interface HomeState {
-    user: User | null;
     weightData: WeightData | null;
     meals: MealItem[];
     waterIntake: WaterIntake;
@@ -122,7 +109,6 @@ export interface HomeState {
 // ============================================================================
 
 export interface HomeDataResponse {
-    user: User;
     weight: WeightData;
     meals: MealItem[];
     water: WaterIntake;

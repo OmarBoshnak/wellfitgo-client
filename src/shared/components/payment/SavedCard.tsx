@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
         borderColor: colors.border,
     },
     content: {
-        flexDirection: 'row',
+        flexDirection: 'row-reverse',
         alignItems: 'center',
         padding: horizontalScale(14),
         gap: horizontalScale(12),
@@ -207,12 +207,13 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: colors.textPrimary,
         letterSpacing: 1,
+        textAlign: 'right'
     },
     cardMeta: {
         fontSize: ScaleFontSize(12),
         color: colors.textSecondary,
         marginTop: verticalScale(2),
-        writingDirection: 'rtl',
+        textAlign: 'right'
     },
     deleteButton: {
         padding: horizontalScale(8),

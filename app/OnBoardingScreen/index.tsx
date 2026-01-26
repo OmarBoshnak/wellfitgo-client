@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Swiper from 'react-native-swiper';
 
 import { colors } from '@/src/shared/core/constants/Theme';
@@ -19,14 +18,16 @@ import { Slides } from '@/src/shared/core/constants/Slides';
 import {
     OnboardingSlide,
 } from '@/src/shared/components/onboarding';
+import { useAppDispatch } from '@/src/shared/store';
+import { completeOnboarding } from '@/src/shared/store/slices/authSlice';
+import * as asyncStorage from '@/src/shared/services/storage/asyncStorage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const ONBOARDING_COMPLETE_KEY = '@wellfitgo_onboarding_complete';
-
 export default function OnBoardingScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const swiperRef = useRef<any>(null);
+    const dispatch = useAppDispatch();
 
     // React state for current slide
     // React state for current slide
@@ -35,7 +36,7 @@ export default function OnBoardingScreen() {
     // Handle skip - navigate to login
     const handleSkip = useCallback(async () => {
         await markOnboardingComplete();
-        router.replace('/(auth)/LoginScreen' as any);
+        router.replace('/(auth)/login' as any);
     }, [router]);
 
     // Handle next slide or complete
@@ -45,7 +46,7 @@ export default function OnBoardingScreen() {
         if (nextIndex >= Slides.length) {
             // Last slide - complete onboarding
             await markOnboardingComplete();
-            router.replace('/(auth)/LoginScreen' as any);
+            router.replace('/(auth)/login' as any);
         } else {
             // Use swiper to navigate
             if (swiperRef.current) {
@@ -62,7 +63,8 @@ export default function OnBoardingScreen() {
     // Mark onboarding as complete in storage
     const markOnboardingComplete = async () => {
         try {
-            await AsyncStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
+            await asyncStorage.setOnboardingCompleted();
+            dispatch(completeOnboarding());
         } catch (error) {
             console.error('Failed to save onboarding completion:', error);
         }

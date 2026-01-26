@@ -41,6 +41,7 @@ const FeatureItem = memo(function FeatureItem({
             entering={FadeInUp.delay(100 + index * 50).duration(300)}
             style={styles.featureItem}
         >
+            <Text style={styles.featureText}>{feature.textAr}</Text>
             <View style={styles.checkContainer}>
                 <LinearGradient
                     colors={gradients.primary}
@@ -53,7 +54,6 @@ const FeatureItem = memo(function FeatureItem({
                     />
                 </LinearGradient>
             </View>
-            <Text style={styles.featureText}>{feature.textAr}</Text>
         </Animated.View>
     );
 });
@@ -64,7 +64,7 @@ const FeatureItem = memo(function FeatureItem({
 function PlanFeatures({
     features,
     columns = 2,
-    title = 'ما ستحصل عليه',
+    title = 'ما مميزات الاشتراك مع WellFitGo',
 }: PlanFeaturesProps) {
     // Split features into columns if needed
     const renderFeatures = () => {
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
         fontSize: ScaleFontSize(13),
         fontWeight: '500',
         color: colors.textPrimary,
-        writingDirection: 'rtl',
+        textAlign: 'right'
     },
 });
 

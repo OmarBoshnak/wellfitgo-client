@@ -3,7 +3,15 @@
  * @description Voice recording and playback for chat messages
  */
 
-import { Audio, AVPlaybackStatus, AVPlaybackStatusSuccess } from 'expo-av';
+import {
+    createAudioPlayer,
+    AudioPlayer,
+    requestRecordingPermissionsAsync,
+    setAudioModeAsync,
+    RecordingOptions,
+    AudioQuality,
+    AudioModule
+} from 'expo-audio';
 import type { RecordingState, VoiceRecordingData } from '@/src/shared/types/chat';
 
 // ============================================================================
@@ -28,22 +36,21 @@ export interface AudioPlaybackState {
 // Constants
 // ============================================================================
 
-const RECORDING_OPTIONS: Audio.RecordingOptions = {
+const RECORDING_OPTIONS: RecordingOptions = {
+    isMeteringEnabled: true,
+    sampleRate: 44100,
+    numberOfChannels: 1,
+    bitRate: 128000,
+    extension: '.m4a',
     android: {
         extension: '.m4a',
-        outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-        audioEncoder: Audio.AndroidAudioEncoder.AAC,
-        sampleRate: 44100,
-        numberOfChannels: 1,
-        bitRate: 128000,
+        outputFormat: 'mpeg4',
+        audioEncoder: 'aac',
     },
     ios: {
         extension: '.m4a',
-        outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
-        audioQuality: Audio.IOSAudioQuality.HIGH,
-        sampleRate: 44100,
-        numberOfChannels: 1,
-        bitRate: 128000,
+        outputFormat: 'mpeg4aac',
+        audioQuality: AudioQuality.HIGH,
         linearPCMBitDepth: 16,
         linearPCMIsBigEndian: false,
         linearPCMIsFloat: false,
@@ -51,7 +58,7 @@ const RECORDING_OPTIONS: Audio.RecordingOptions = {
     web: {
         mimeType: 'audio/webm',
         bitsPerSecond: 128000,
-    },
+    }
 };
 
 // ============================================================================
@@ -62,20 +69,20 @@ const RECORDING_OPTIONS: Audio.RecordingOptions = {
  * Request microphone permissions
  */
 export const requestMicrophonePermission = async (): Promise<boolean> => {
-    const { status } = await Audio.requestPermissionsAsync();
-    return status === 'granted';
+    const { granted } = await requestRecordingPermissionsAsync();
+    return granted;
 };
 
 /**
  * Set audio mode for recording
  */
 export const setAudioModeForRecording = async (): Promise<void> => {
-    await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
+    await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+        shouldPlayInBackground: false,
+        interruptionMode: 'duckOthers', // 'shouldDuckAndroid' equivalent
+        shouldRouteThroughEarpiece: false,
     });
 };
 
@@ -83,12 +90,12 @@ export const setAudioModeForRecording = async (): Promise<void> => {
  * Set audio mode for playback
  */
 export const setAudioModeForPlayback = async (): Promise<void> => {
-    await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
+    await setAudioModeAsync({
+        allowsRecording: false,
+        playsInSilentMode: true,
+        shouldPlayInBackground: false,
+        interruptionMode: 'duckOthers',
+        shouldRouteThroughEarpiece: false,
     });
 };
 
@@ -101,7 +108,12 @@ export const setAudioModeForPlayback = async (): Promise<void> => {
  * Handles voice recording lifecycle with metering for waveform visualization
  */
 export class AudioRecorderManager {
-    private recording: Audio.Recording | null = null;
+    // Type is AudioRecorder but properly imported from where?
+    // AudioModule.AudioRecorder is the class constructor.
+    // The instance type is `AudioRecorder` (interface or class type).
+    // We can use `InstanceType<typeof AudioModule.AudioRecorder>` or assume `AudioRecorder` type is exported correctly.
+    // If we use `import { AudioRecorder } from 'expo-audio'` as a type, it works.
+    private recording: InstanceType<typeof AudioModule.AudioRecorder> | null = null;
     private meteringValues: number[] = [];
     private meteringInterval: ReturnType<typeof setInterval> | null = null;
     private startTime: number = 0;
@@ -117,20 +129,22 @@ export class AudioRecorderManager {
 
         await setAudioModeForRecording();
 
-        this.recording = new Audio.Recording();
-        await this.recording.prepareToRecordAsync(RECORDING_OPTIONS);
-        await this.recording.startAsync();
+        this.recording = new AudioModule.AudioRecorder(RECORDING_OPTIONS);
+        this.recording.record();
 
         this.startTime = Date.now();
         this.meteringValues = [];
 
         // Collect metering values for waveform (every 100ms)
-        this.meteringInterval = setInterval(async () => {
+        this.meteringInterval = setInterval(() => {
             if (this.recording) {
                 try {
-                    const status = await this.recording.getStatusAsync();
+                    const status = this.recording.getStatus();
                     if (status.isRecording && status.metering !== undefined) {
                         // Normalize metering value (-160 to 0) to 0-1 range
+                        // Note: expo-audio metering range might differ, assuming typical dB values
+                        // If expo-audio returns 0-1 directly or different dB range, adjust here.
+                        // Assuming standard dB: -160 (silence) to 0 (max)
                         const normalized = Math.max(0, (status.metering + 60) / 60);
                         this.meteringValues.push(normalized);
                     }
@@ -146,7 +160,7 @@ export class AudioRecorderManager {
      */
     async pauseRecording(): Promise<void> {
         if (this.recording) {
-            await this.recording.pauseAsync();
+            this.recording.pause();
         }
     }
 
@@ -155,7 +169,7 @@ export class AudioRecorderManager {
      */
     async resumeRecording(): Promise<void> {
         if (this.recording) {
-            await this.recording.startAsync();
+            this.recording.record();
         }
     }
 
@@ -173,10 +187,10 @@ export class AudioRecorderManager {
         }
 
         try {
-            const status = await this.recording.getStatusAsync();
-            await this.recording.stopAndUnloadAsync();
+            const status = this.recording.getStatus();
+            await this.recording.stop();
 
-            const uri = this.recording.getURI();
+            const uri = this.recording.uri;
             const duration = status.durationMillis ? status.durationMillis / 1000 : 0;
 
             this.recording = null;
@@ -187,10 +201,15 @@ export class AudioRecorderManager {
 
             await setAudioModeForPlayback();
 
+            // Filter out any potential NaN or Infinite values from metering
+            const cleanMetering = this.meteringValues.map(v =>
+                Number.isFinite(v) ? v : 0
+            );
+
             return {
                 uri,
                 duration,
-                meteringValues: this.meteringValues,
+                meteringValues: cleanMetering,
             };
         } catch (error) {
             this.recording = null;
@@ -209,7 +228,7 @@ export class AudioRecorderManager {
 
         if (this.recording) {
             try {
-                await this.recording.stopAndUnloadAsync();
+                await this.recording.stop();
             } catch {
                 // Ignore errors on cancel
             }
@@ -228,15 +247,13 @@ export class AudioRecorderManager {
         }
 
         try {
-            const status = await this.recording.getStatusAsync();
+            const status = this.recording.getStatus();
             const duration = status.durationMillis ? status.durationMillis / 1000 : 0;
 
             let state: RecordingState = 'idle';
             if (status.isRecording) {
                 state = 'recording';
-            } else if (status.isDoneRecording) {
-                state = 'stopped';
-            } else if (duration > 0) {
+            } else if (duration > 0 && !status.isRecording) {
                 state = 'paused';
             }
 
@@ -254,7 +271,7 @@ export class AudioRecorderManager {
      * Check if currently recording
      */
     isRecording(): boolean {
-        return this.recording !== null;
+        return this.recording !== null && this.recording.isRecording;
     }
 }
 
@@ -267,7 +284,7 @@ export class AudioRecorderManager {
  * Handles voice message playback with progress tracking
  */
 export class AudioPlayerManager {
-    private sound: Audio.Sound | null = null;
+    private player: AudioPlayer | null = null;
     private onStatusUpdate: ((status: AudioPlaybackState) => void) | null = null;
 
     /**
@@ -283,19 +300,23 @@ export class AudioPlayerManager {
         this.onStatusUpdate = onStatusUpdate || null;
         await setAudioModeForPlayback();
 
-        const { sound } = await Audio.Sound.createAsync(
-            { uri },
-            { shouldPlay: true },
-            this.handleStatusUpdate
-        );
+        // createAudioPlayer(source, options)
+        this.player = createAudioPlayer(uri, {
+            updateInterval: 100 // More frequent updates for smooth progress
+        });
 
-        this.sound = sound;
+        // Add listener for status updates
+        this.player.addListener('playbackStatusUpdate', this.handleStatusUpdate);
+
+        // Start playing
+        this.player.play();
     }
 
     /**
      * Handle playback status updates
      */
-    private handleStatusUpdate = (status: AVPlaybackStatus) => {
+    private handleStatusUpdate = (status: any) => {
+        // status is AudioStatus from expo-audio
         if (!status.isLoaded) {
             this.onStatusUpdate?.({
                 isPlaying: false,
@@ -307,21 +328,23 @@ export class AudioPlayerManager {
             return;
         }
 
-        const successStatus = status as AVPlaybackStatusSuccess;
-        const progress = successStatus.durationMillis
-            ? successStatus.positionMillis / successStatus.durationMillis
+        const durationMillis = status.duration * 1000;
+        const positionMillis = status.currentTime * 1000;
+
+        const progress = durationMillis > 0
+            ? positionMillis / durationMillis
             : 0;
 
         this.onStatusUpdate?.({
-            isPlaying: successStatus.isPlaying,
+            isPlaying: status.playing,
             isLoaded: true,
-            positionMillis: successStatus.positionMillis,
-            durationMillis: successStatus.durationMillis || 0,
+            positionMillis,
+            durationMillis,
             progress,
         });
 
         // Auto-cleanup when finished
-        if (successStatus.didJustFinish) {
+        if (status.didJustFinish) {
             this.unload();
         }
     };
@@ -330,8 +353,8 @@ export class AudioPlayerManager {
      * Pause playback
      */
     async pause(): Promise<void> {
-        if (this.sound) {
-            await this.sound.pauseAsync();
+        if (this.player) {
+            this.player.pause();
         }
     }
 
@@ -339,8 +362,8 @@ export class AudioPlayerManager {
      * Resume playback
      */
     async resume(): Promise<void> {
-        if (this.sound) {
-            await this.sound.playAsync();
+        if (this.player) {
+            this.player.play();
         }
     }
 
@@ -348,12 +371,11 @@ export class AudioPlayerManager {
      * Toggle play/pause
      */
     async togglePlayback(): Promise<void> {
-        if (this.sound) {
-            const status = await this.sound.getStatusAsync();
-            if (status.isLoaded && status.isPlaying) {
-                await this.pause();
+        if (this.player) {
+            if (this.player.playing) {
+                this.player.pause();
             } else {
-                await this.resume();
+                this.player.play();
             }
         }
     }
@@ -362,8 +384,8 @@ export class AudioPlayerManager {
      * Seek to position
      */
     async seekTo(positionMillis: number): Promise<void> {
-        if (this.sound) {
-            await this.sound.setPositionAsync(positionMillis);
+        if (this.player) {
+            await this.player.seekTo(positionMillis / 1000);
         }
     }
 
@@ -371,13 +393,14 @@ export class AudioPlayerManager {
      * Unload sound
      */
     async unload(): Promise<void> {
-        if (this.sound) {
+        if (this.player) {
             try {
-                await this.sound.unloadAsync();
+                // remove() releases resources
+                this.player.remove();
             } catch {
                 // Ignore unload errors
             }
-            this.sound = null;
+            this.player = null;
         }
         this.onStatusUpdate = null;
     }

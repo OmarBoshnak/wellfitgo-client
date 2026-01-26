@@ -31,7 +31,7 @@ export default function AppLayout() {
 
         if (!isAuthenticated) {
             console.log('[AppLayout] Not authenticated, redirecting to login');
-            router.replace('/(auth)/LoginScreen' as never);
+            router.replace('/(auth)/login' as never);
         }
     }, [isHydrated, isAuthenticated, router]);
 
@@ -52,7 +52,6 @@ export default function AppLayout() {
             }}
         >
             <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="doctor" />
             <Stack.Screen name="payment" />
         </Stack>
     );

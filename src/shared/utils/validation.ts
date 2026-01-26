@@ -123,7 +123,7 @@ export const genderSchema = z.enum(['male', 'female']);
 
 /** Goal validation schema */
 export const goalSchema = z.enum(
-    ['lose_weight', 'gain_muscle', 'maintain', 'improve_health']
+    ['weight_loss', 'gain_muscle', 'maintain', 'improve_health']
 );
 
 /** Complete health form schema */
