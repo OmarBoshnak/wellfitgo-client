@@ -4,56 +4,40 @@
  */
 
 import React, { memo, useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
     FadeInUp,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring,
 } from 'react-native-reanimated';
 
 import { colors, gradients, shadows } from '@/src/shared/core/constants/Theme';
 import { horizontalScale, verticalScale, ScaleFontSize } from '@/src/shared/core/utils/scaling';
 import { DietPlanCardProps } from '@/src/shared/types/meals';
 import AnimatedProgressRing from '@/src/shared/components/shared/AnimatedProgressRing';
-import { hapticLight, springConfigs } from '@/src/shared/utils/animations/presets';
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /**
  * DietPlanCard - Enhanced with glassmorphism and progress ring
  */
 function DietPlanCard({
     plan,
-    onChangeRequest,
     isLoading,
+    mealCount,
+    completionProgress,
 }: DietPlanCardProps) {
-    const buttonScale = useSharedValue(1);
+    const safeProgress = useMemo(() => {
+        if (typeof completionProgress !== 'number' || Number.isNaN(completionProgress)) {
+            return 0;
+        }
+        return Math.min(Math.max(completionProgress, 0), 1);
+    }, [completionProgress]);
 
-    // Calculate completion progress (mock for now)
-    const completionProgress = useMemo(() => {
-        // This would come from actual completion data
-        return 0.65; // 65% complete
-    }, []);
-
-    const handlePressIn = () => {
-        buttonScale.value = withSpring(0.95, springConfigs.stiff);
-    };
-
-    const handlePressOut = () => {
-        buttonScale.value = withSpring(1, springConfigs.bouncy);
-    };
-
-    const handleChangeRequest = async () => {
-        await hapticLight();
-        onChangeRequest?.();
-    };
-
-    const buttonAnimatedStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: buttonScale.value }],
-    }));
+    const safeMealCount = useMemo(() => {
+        if (typeof mealCount !== 'number' || Number.isNaN(mealCount)) {
+            return 0;
+        }
+        return Math.max(0, Math.round(mealCount));
+    }, [mealCount]);
 
     if (isLoading || !plan) {
         return (
@@ -87,14 +71,14 @@ function DietPlanCard({
                     {/* Left: Progress Ring + Emoji */}
                     <View style={styles.leftSection}>
                         <AnimatedProgressRing
-                            progress={completionProgress}
+                            progress={safeProgress}
                             size={horizontalScale(72)}
                             strokeWidth={4}
                         >
                             <Text style={styles.emoji}>{plan.emoji || '🍽️'}</Text>
                         </AnimatedProgressRing>
                         <Text style={styles.progressLabel}>
-                            {Math.round(completionProgress * 100)}%
+                            {Math.round(safeProgress * 100)}%
                         </Text>
                     </View>
 
@@ -103,9 +87,9 @@ function DietPlanCard({
                         <Text style={styles.planName}>
                             {plan.nameAr || plan.name}
                         </Text>
-                        {plan.doctorNameAr && (
+                        {(plan.doctorNameAr || plan.doctorName) && (
                             <Text style={styles.doctorName}>
-                                {plan.doctorNameAr}
+                                {plan.doctorNameAr || plan.doctorName}
                             </Text>
                         )}
 
@@ -117,15 +101,7 @@ function DietPlanCard({
                                     size={horizontalScale(14)}
                                     color={colors.primaryDark}
                                 />
-                                <Text style={styles.statText}>4 وجبات</Text>
-                            </View>
-                            <View style={styles.statItem}>
-                                <Ionicons
-                                    name="flame"
-                                    size={horizontalScale(14)}
-                                    color={colors.warning}
-                                />
-                                <Text style={styles.statText}>1,800 سعرة</Text>
+                                <Text style={styles.statText}>{safeMealCount} وجبات</Text>
                             </View>
                         </View>
 
@@ -141,30 +117,6 @@ function DietPlanCard({
                         )}
                     </View>
                 </View>
-
-                {/* Change Request Button */}
-                <AnimatedPressable
-                    onPress={handleChangeRequest}
-                    onPressIn={handlePressIn}
-                    onPressOut={handlePressOut}
-                    accessibilityRole="button"
-                    accessibilityLabel="طلب تغيير الخطة"
-                    style={[styles.changeButton, buttonAnimatedStyle]}
-                >
-                    <LinearGradient
-                        colors={gradients.primary}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.changeButtonGradient}
-                    >
-                        <Ionicons
-                            name="swap-horizontal"
-                            size={horizontalScale(16)}
-                            color={colors.white}
-                        />
-                        <Text style={styles.changeButtonText}>طلب تغيير</Text>
-                    </LinearGradient>
-                </AnimatedPressable>
 
                 {/* Format Badge */}
                 <View style={styles.formatBadge}>
@@ -261,24 +213,6 @@ const styles = StyleSheet.create({
         fontSize: ScaleFontSize(10),
         color: colors.textSecondary,
         fontWeight: '500',
-    },
-    changeButton: {
-        marginHorizontal: horizontalScale(16),
-        marginBottom: horizontalScale(16),
-        borderRadius: horizontalScale(12),
-        overflow: 'hidden',
-    },
-    changeButtonGradient: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: verticalScale(12),
-        gap: horizontalScale(8),
-    },
-    changeButtonText: {
-        fontSize: ScaleFontSize(14),
-        fontWeight: '600',
-        color: colors.white,
     },
     formatBadge: {
         position: 'absolute',

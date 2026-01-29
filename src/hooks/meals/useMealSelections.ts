@@ -8,9 +8,15 @@ import { useAppDispatch, useAppSelector } from '@/src/shared/store';
 import {
     selectSelections,
     selectMeals,
+    selectSelectedDate,
+    selectDayOffset,
+    selectMealPlan,
     selectMealOption,
 } from '@/src/shared/store/slices/mealsSlice';
 import { MealCategory, MealOption } from '@/src/shared/types/meals';
+import { toISODateString } from '@/src/shared/utils/dateTime/mealCalendarHelpers';
+import { upsertMealCompletion } from '@/src/shared/services/backend/api';
+import { selectToken } from '@/src/shared/store/selectors/auth.selectors';
 
 /**
  * Hook for managing meal option selections
@@ -21,6 +27,19 @@ export function useMealSelections() {
     // Selectors
     const selections = useAppSelector(selectSelections);
     const meals = useAppSelector(selectMeals);
+    const selectedDate = useAppSelector(selectSelectedDate);
+    const dayOffset = useAppSelector(selectDayOffset);
+    const plan = useAppSelector(selectMealPlan);
+    const token = useAppSelector(selectToken);
+
+    const currentDate = useMemo(() => {
+        if (plan?.format === 'daily') {
+            const baseDate = new Date(selectedDate);
+            baseDate.setDate(baseDate.getDate() + dayOffset);
+            return toISODateString(baseDate);
+        }
+        return selectedDate;
+    }, [selectedDate, dayOffset, plan?.format]);
 
     // Get selections for a specific meal
     const getSelectionsForMeal = useCallback((mealId: string): Record<string, string[]> => {
@@ -45,8 +64,42 @@ export function useMealSelections() {
         optionId: string,
         maxSelect?: number
     ) => {
+        const resolvedMax = maxSelect ?? 1;
+        const currentMealSelections = selections[mealId] || {};
+        const currentCategorySelections = currentMealSelections[categoryId] || [];
+        const nextCategorySelections = [...currentCategorySelections];
+        const existingIndex = nextCategorySelections.indexOf(optionId);
+
+        if (existingIndex >= 0) {
+            nextCategorySelections.splice(existingIndex, 1);
+        } else {
+            if (nextCategorySelections.length >= resolvedMax) {
+                nextCategorySelections.shift();
+            }
+            nextCategorySelections.push(optionId);
+        }
+
+        const nextMealSelections: Record<string, string[]> = { ...currentMealSelections };
+        if (nextCategorySelections.length > 0) {
+            nextMealSelections[categoryId] = nextCategorySelections;
+        } else {
+            delete nextMealSelections[categoryId];
+        }
+
         dispatch(selectMealOption({ mealId, categoryId, optionId, maxSelect }));
-    }, [dispatch]);
+
+        if (!token) {
+            return;
+        }
+
+        const meal = meals.find(m => m.id === mealId);
+        upsertMealCompletion({
+            mealId,
+            date: currentDate,
+            mealType: meal?.type,
+            selectedOptions: nextMealSelections,
+        }, token).catch(() => null);
+    }, [dispatch, selections, token, meals, currentDate]);
 
     // Get all selected options for a meal (flattened)
     const getAllSelectedOptionsForMeal = useCallback((mealId: string): MealOption[] => {

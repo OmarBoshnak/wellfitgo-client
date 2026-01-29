@@ -34,6 +34,7 @@ import {
     MealsErrorBoundary,
 } from '@/src/features/meals';
 import AnimatedProgressRing from '@/src/shared/components/shared/AnimatedProgressRing';
+import { getOrCreateConversation, sendChatMessage } from '@/src/shared/services/backend/api';
 
 // Redux
 import { useAppDispatch, useAppSelector } from '@/src/shared/store';
@@ -46,6 +47,7 @@ import {
     setActiveMeal,
     selectMealOption,
 } from '@/src/shared/store/slices/mealsSlice';
+import { selectToken } from '@/src/shared/store/selectors/auth.selectors';
 
 /**
  * DailyProgressBadge - Floating progress indicator
@@ -84,6 +86,7 @@ export default function MealsScreen() {
         error,
         refresh: refreshPlan,
         format,
+        summary,
     } = useMealPlan();
 
     const {
@@ -111,11 +114,49 @@ export default function MealsScreen() {
         goToNext,
     } = useDailyNavigation();
 
+    const resolvedTotalMeals = useMemo(() => {
+        if (typeof summary?.planTotalMeals === 'number' && summary.planTotalMeals > 0) {
+            return summary.planTotalMeals;
+        }
+        if (typeof summary?.totalMeals === 'number' && summary.totalMeals > 0) {
+            return summary.totalMeals;
+        }
+        return progress.total;
+    }, [summary?.planTotalMeals, summary?.totalMeals, progress.total]);
+
+    const resolvedCompletedMeals = useMemo(() => {
+        if (typeof summary?.planTotalMeals === 'number' && summary.planTotalMeals > 0) {
+            return typeof summary.planMealsCompleted === 'number'
+                ? summary.planMealsCompleted
+                : progress.completed;
+        }
+        if (typeof summary?.totalMeals === 'number' && summary.totalMeals > 0) {
+            return typeof summary.mealsCompleted === 'number'
+                ? summary.mealsCompleted
+                : progress.completed;
+        }
+        return progress.completed;
+    }, [
+        summary?.planTotalMeals,
+        summary?.planMealsCompleted,
+        summary?.totalMeals,
+        summary?.mealsCompleted,
+        progress.completed,
+    ]);
+
+    const completionProgress = useMemo(() => {
+        if (!resolvedTotalMeals) {
+            return 0;
+        }
+        return resolvedCompletedMeals / resolvedTotalMeals;
+    }, [resolvedCompletedMeals, resolvedTotalMeals]);
+
     // Selectors
     const showChangeRequestModal = useAppSelector(selectShowChangeRequestModal);
     const showOptionsSheet = useAppSelector(selectShowOptionsSheet);
     const activeMeal = useAppSelector(selectActiveMeal);
     const selections = useAppSelector(selectSelections);
+    const token = useAppSelector(selectToken);
 
     // Handlers
     const handleRefresh = useCallback(async () => {
@@ -132,19 +173,46 @@ export default function MealsScreen() {
         Alert.alert('سجل الوجبات', 'سيتم إضافة سجل الوجبات قريباً');
     }, []);
 
-    const handleChangeRequest = useCallback(() => {
-        dispatch(setShowChangeRequestModal(true));
-    }, [dispatch]);
+    const handleChangeRequestSubmit = useCallback(async (reason: string) => {
+        if (!token) {
+            Alert.alert('تنبيه', 'يرجى تسجيل الدخول لإرسال الطلب.');
+            return;
+        }
 
-    const handleChangeRequestSubmit = useCallback((reason: string) => {
-        dispatch(setShowChangeRequestModal(false));
-        Alert.alert(
-            'تم إرسال الطلب',
-            'سيتم مراجعة طلبك والرد عليك قريباً',
-            [{ text: 'حسناً' }]
-        );
-        console.log('Change request:', reason);
-    }, [dispatch]);
+        const doctorId = summary?.doctor?.id || plan?.doctorId;
+        if (!doctorId) {
+            Alert.alert('تنبيه', 'لم يتم العثور على الطبيب المرتبط بخطتك الغذائية.');
+            return;
+        }
+
+        const planName = plan?.nameAr || plan?.name || 'الخطة الغذائية';
+        const content = `طلب تغيير الخطة (${planName})\nالسبب: ${reason}`;
+
+        try {
+            const conversation = await getOrCreateConversation(doctorId, token);
+            const conversationId = conversation?.data?.id;
+
+            if (!conversationId) {
+                throw new Error('Missing conversation');
+            }
+
+            await sendChatMessage(
+                conversationId,
+                { content, messageType: 'text' },
+                token
+            );
+
+            dispatch(setShowChangeRequestModal(false));
+            Alert.alert(
+                'تم إرسال الطلب',
+                'سيتم مراجعة طلبك والرد عليك قريباً',
+                [{ text: 'حسناً' }]
+            );
+        } catch (error) {
+            console.error('Change request failed:', error);
+            Alert.alert('خطأ', 'تعذر إرسال الطلب. حاول مرة أخرى.');
+        }
+    }, [dispatch, token, summary?.doctor?.id, plan?.doctorId, plan?.nameAr, plan?.name]);
 
     const handleMonthChange = useCallback((month: number, year: number) => {
         goToMonth(month, year);
@@ -243,8 +311,9 @@ export default function MealsScreen() {
                     >
                         <DietPlanCard
                             plan={plan!}
-                            onChangeRequest={handleChangeRequest}
                             isLoading={isLoading}
+                            mealCount={resolvedTotalMeals}
+                            completionProgress={completionProgress}
                         />
                     </MealsErrorBoundary>
 

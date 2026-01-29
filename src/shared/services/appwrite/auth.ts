@@ -289,6 +289,25 @@ export class AppwriteAuth {
     }
 
     /**
+     * Get current JWT token for API requests
+     */
+    static async getJWT() {
+        try {
+            const session = await account.getSession('current');
+            // For Appwrite, the JWT is typically in the session itself or needs to be created
+            // Let's try to get the current user and create a JWT
+            const user = await account.get();
+            
+            // Create a new JWT token for the current session
+            const jwt = await account.createJWT();
+            return jwt.jwt; // Return the JWT token
+        } catch (error: any) {
+            console.error('Get JWT error:', error);
+            return null;
+        }
+    }
+
+    /**
      * Check if user is logged in
      */
     static async isLoggedIn() {

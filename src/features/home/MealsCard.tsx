@@ -19,6 +19,7 @@ import { colors, shadows } from '@/src/shared/core/constants/Theme';
 import { horizontalScale, verticalScale, ScaleFontSize } from '@/src/shared/core/utils/scaling';
 import { MealItem, DailyNutrition } from '@/src/shared/types/home';
 import { getMealTypeNameAr } from '@/src/shared/utils/homeData';
+import { calculateMealMacros } from '@/src/shared/utils/mealMacros';
 
 interface MealsCardProps {
     /** Today's meals */
@@ -31,7 +32,17 @@ interface MealsCardProps {
     onViewAll: () => void;
     /** Loading state */
     isLoading?: boolean;
+    /** Error state */
+    error?: string | null;
+    /** Retry handler */
+    onRetry?: () => void;
 }
+
+const formatMacroValue = (value: number): string => {
+    if (!Number.isFinite(value)) return '0';
+    const rounded = Math.round(value * 10) / 10;
+    return rounded.toString();
+};
 
 /**
  * Single meal item component
@@ -44,6 +55,13 @@ const MealItemRow = memo(function MealItemRow({
     onToggle: (id: string) => void;
 }) {
     const scale = useSharedValue(1);
+    const macroTotals = calculateMealMacros(meal);
+    const itemNames = meal.items
+        ?.map((item) => item.name)
+        .filter((name) => Boolean(name));
+    const itemsLabel = itemNames && itemNames.length > 0
+        ? `${itemNames.slice(0, 3).join('، ')}${itemNames.length > 3 ? '…' : ''}`
+        : null;
 
     const handlePress = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -104,6 +122,12 @@ const MealItemRow = memo(function MealItemRow({
                     <Text style={styles.mealType}>
                         {getMealTypeNameAr(meal.type)} • {formatTime(meal.time)}
                     </Text>
+                    {itemsLabel ? (
+                        <Text style={styles.mealItems}>{itemsLabel}</Text>
+                    ) : null}
+                    <Text style={styles.mealMacros}>
+                        بروتين {formatMacroValue(macroTotals.protein)}g • كربوهيدرات {formatMacroValue(macroTotals.carbs)}g • دهون {formatMacroValue(macroTotals.fat)}g
+                    </Text>
                 </View>
             </Animated.View>
         </Pressable>
@@ -119,11 +143,16 @@ function MealsCard({
     onMealToggle,
     onViewAll,
     isLoading = false,
+    error,
+    onRetry,
 }: MealsCardProps) {
-    const caloriesProgress = Math.min(
-        (nutrition.calories / nutrition.targetCalories) * 100,
-        100
-    );
+    const caloriesProgress = nutrition.targetCalories
+        ? Math.min((nutrition.calories / nutrition.targetCalories) * 100, 100)
+        : 0;
+    const caloriesValue = formatMacroValue(nutrition.calories);
+    const proteinValue = formatMacroValue(nutrition.protein);
+    const carbsValue = formatMacroValue(nutrition.carbs);
+    const fatValue = formatMacroValue(nutrition.fat);
 
     if (isLoading) {
         return (
@@ -132,6 +161,8 @@ function MealsCard({
             </View>
         );
     }
+
+    const hasError = Boolean(error);
 
     return (
         <Animated.View
@@ -166,8 +197,8 @@ function MealsCard({
                 <View style={styles.caloriesProgress}>
                     <View style={styles.caloriesHeader}>
                         <Text style={styles.caloriesCount}>
-                            {nutrition.targetCalories} / {nutrition.calories}
-                        </Text>                        
+                            {nutrition.targetCalories} / {caloriesValue}
+                        </Text>
                         <Text style={styles.caloriesLabel}>السعرات الحرارية</Text>
                     </View>
                     <View style={styles.progressBar}>
@@ -182,29 +213,52 @@ function MealsCard({
 
                 {/* Meals List */}
                 <View style={styles.mealsList}>
-                    {meals.map((meal) => (
-                        <MealItemRow
-                            key={meal.id}
-                            meal={meal}
-                            onToggle={onMealToggle}
-                        />
-                    ))}
+                    {hasError ? (
+                        <View style={styles.errorState}>
+                            <Text style={styles.errorText}>تعذر تحميل الوجبات</Text>
+                            {onRetry ? (
+                                <Pressable
+                                    onPress={onRetry}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="إعادة محاولة تحميل الوجبات"
+                                    style={styles.retryButton}
+                                >
+                                    <Ionicons
+                                        name="refresh"
+                                        size={horizontalScale(14)}
+                                        color={colors.primaryDark}
+                                    />
+                                    <Text style={styles.retryText}>إعادة المحاولة</Text>
+                                </Pressable>
+                            ) : null}
+                        </View>
+                    ) : meals.length === 0 ? (
+                        <Text style={styles.emptyText}>لا توجد وجبات اليوم</Text>
+                    ) : (
+                        meals.map((meal) => (
+                            <MealItemRow
+                                key={meal.id}
+                                meal={meal}
+                                onToggle={onMealToggle}
+                            />
+                        ))
+                    )}
                 </View>
 
                 {/* Macros Summary */}
                 <View style={styles.macrosContainer}>
                     <View style={styles.macroItem}>
-                        <Text style={styles.macroValue}>{nutrition.protein}g</Text>
+                        <Text style={styles.macroValue}>{proteinValue}g</Text>
                         <Text style={styles.macroLabel}>بروتين</Text>
                     </View>
                     <View style={styles.macroDivider} />
                     <View style={styles.macroItem}>
-                        <Text style={styles.macroValue}>{nutrition.carbs}g</Text>
+                        <Text style={styles.macroValue}>{carbsValue}g</Text>
                         <Text style={styles.macroLabel}>كربوهيدرات</Text>
                     </View>
                     <View style={styles.macroDivider} />
                     <View style={styles.macroItem}>
-                        <Text style={styles.macroValue}>{nutrition.fat}g</Text>
+                        <Text style={styles.macroValue}>{fatValue}g</Text>
                         <Text style={styles.macroLabel}>دهون</Text>
                     </View>
                 </View>
@@ -300,6 +354,36 @@ const styles = StyleSheet.create({
         gap: verticalScale(8),
         marginBottom: verticalScale(16),
     },
+    emptyText: {
+        fontSize: ScaleFontSize(12),
+        color: colors.textSecondary,
+        textAlign: 'center',
+        writingDirection: 'rtl',
+    },
+    errorState: {
+        alignItems: 'center',
+        gap: verticalScale(6),
+    },
+    errorText: {
+        fontSize: ScaleFontSize(12),
+        color: colors.error,
+        textAlign: 'center',
+        writingDirection: 'rtl',
+    },
+    retryButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: horizontalScale(6),
+        paddingHorizontal: horizontalScale(12),
+        paddingVertical: verticalScale(6),
+        borderRadius: horizontalScale(8),
+        backgroundColor: colors.bgSecondary,
+    },
+    retryText: {
+        fontSize: ScaleFontSize(11),
+        color: colors.primaryDark,
+        fontWeight: '600',
+    },
     mealItem: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -342,6 +426,18 @@ const styles = StyleSheet.create({
         fontSize: ScaleFontSize(12),
         color: colors.textSecondary,
         marginTop: verticalScale(2),
+    },
+    mealItems: {
+        fontSize: ScaleFontSize(11),
+        color: colors.textSecondary,
+        marginTop: verticalScale(4),
+        writingDirection: 'rtl',
+    },
+    mealMacros: {
+        fontSize: ScaleFontSize(11),
+        color: colors.textSecondary,
+        marginTop: verticalScale(4),
+        writingDirection: 'rtl',
     },
     caloriesContainer: {
         alignItems: 'center',

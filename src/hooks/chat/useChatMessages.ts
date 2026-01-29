@@ -3,7 +3,7 @@
  * @description Message fetching, pagination, and real-time updates
  */
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAppDispatch, useAppSelector } from '@/src/shared/store';
 import {
     selectActiveConversationMessages,
@@ -20,8 +20,15 @@ import {
     setMessages,
     markAllMessagesRead,
 } from '@/src/shared/store/slices/chatSlice';
+import { selectToken } from '@/src/shared/store/selectors/auth.selectors';
 import type { Message } from '@/src/shared/types/chat';
-import { mockMessages, mockDelay } from '@/src/shared/utils/chat/mockData';
+import { getChatMessages, markMessagesAsRead, ChatMessageApiItem } from '@/src/shared/services/backend/api';
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const PAGE_SIZE = 50;
 
 // ============================================================================
 // Types
@@ -45,11 +52,36 @@ export interface UseChatMessagesReturn {
 }
 
 // ============================================================================
+// Transform Function
+// ============================================================================
+
+const transformApiMessage = (apiMsg: ChatMessageApiItem, currentUserId?: string): Message => {
+    const isOwnMessage = apiMsg.senderId === currentUserId;
+    return {
+        id: apiMsg._id,
+        conversationId: apiMsg.conversationId,
+        senderId: apiMsg.senderId,
+        content: apiMsg.content,
+        messageType: apiMsg.messageType,
+        mediaUrl: apiMsg.mediaUrl,
+        mediaDuration: apiMsg.mediaDuration,
+        replyToId: apiMsg.replyToId,
+        isDeleted: apiMsg.isDeleted,
+        isEdited: apiMsg.isEdited,
+        isRead: apiMsg.isReadByDoctor && apiMsg.isReadByClient,
+        status: isOwnMessage ? 'delivered' : 'read',
+        createdAt: apiMsg.createdAt,
+    };
+};
+
+// ============================================================================
 // Hook
 // ============================================================================
 
 export function useChatMessages(): UseChatMessagesReturn {
     const dispatch = useAppDispatch();
+    const token = useAppSelector(selectToken);
+    const cursorRef = useRef<string | null>(null);
 
     // Selectors
     const messages = useAppSelector(selectActiveConversationMessages);
@@ -60,63 +92,92 @@ export function useChatMessages(): UseChatMessagesReturn {
     const isLoadingMore = useAppSelector(selectIsLoadingMore);
     const typingIndicator = useAppSelector(selectActiveTypingIndicator);
 
+    // Get current user ID for message ownership check
+    const user = useAppSelector(state => state.auth.user);
+    const currentUserId = user?._id;
+
     // Computed
     const isTyping = useMemo(() => typingIndicator?.isTyping ?? false, [typingIndicator]);
 
     /**
-     * Refresh messages (pull-to-refresh)
+     * Refresh messages (pull-to-refresh or initial load)
      */
     const refreshMessages = useCallback(async () => {
-        if (!conversationId) return;
+        if (!conversationId || !token) return;
 
         dispatch(setLoading(true));
+        cursorRef.current = null;
 
         try {
-            // TODO: Replace with actual API call
-            await mockDelay(500);
-            dispatch(setMessages(mockMessages));
-            dispatch(setHasMoreMessages(true));
-        } catch {
-            // Error handled by slice
+            const response = await getChatMessages(conversationId, token, undefined, PAGE_SIZE);
+
+            if (response.success && response.data) {
+                const transformedMessages = response.data.map(msg =>
+                    transformApiMessage(msg, currentUserId)
+                );
+                dispatch(setMessages(transformedMessages));
+                dispatch(setHasMoreMessages(response.nextCursor !== null));
+                cursorRef.current = response.nextCursor || null;
+            }
+        } catch (err) {
+            console.error('[useChatMessages] Error refreshing messages:', err);
         } finally {
             dispatch(setLoading(false));
         }
-    }, [conversationId, dispatch]);
+    }, [conversationId, token, currentUserId, dispatch]);
 
     /**
      * Load more messages (pagination)
      */
     const loadMoreMessages = useCallback(async () => {
-        if (!conversationId || !hasMoreMessages || isLoadingMore) return;
+        if (!conversationId || !token || !hasMoreMessages || isLoadingMore) return;
 
         dispatch(setLoadingMore(true));
 
         try {
-            // TODO: Replace with actual API call
-            await mockDelay(500);
+            // Get oldest message timestamp as cursor
+            const oldestMessage = messages[0];
+            const cursor = cursorRef.current || oldestMessage?.createdAt;
 
-            // Mock: no more messages after first load
-            dispatch(setHasMoreMessages(false));
+            const response = await getChatMessages(conversationId, token, cursor, PAGE_SIZE);
 
-            // In real implementation:
-            // const olderMessages = await api.getMessages(conversationId, { before: oldestMessageId });
-            // dispatch(prependMessages(olderMessages));
-            // dispatch(setHasMoreMessages(olderMessages.length >= PAGE_SIZE));
-        } catch {
-            // Error handled by slice
+            if (response.success && response.data && response.data.length > 0) {
+                const transformedMessages = response.data.map(msg =>
+                    transformApiMessage(msg, currentUserId)
+                );
+                dispatch(prependMessages(transformedMessages));
+                dispatch(setHasMoreMessages(response.nextCursor !== null));
+                cursorRef.current = response.nextCursor || null;
+            } else {
+                dispatch(setHasMoreMessages(false));
+            }
+        } catch (err) {
+            console.error('[useChatMessages] Error loading more messages:', err);
         } finally {
             dispatch(setLoadingMore(false));
         }
-    }, [conversationId, hasMoreMessages, isLoadingMore, dispatch]);
+    }, [conversationId, token, hasMoreMessages, isLoadingMore, messages, currentUserId, dispatch]);
 
     /**
      * Mark all messages as read
      */
-    const markAsRead = useCallback(() => {
-        if (conversationId) {
+    const markAsRead = useCallback(async () => {
+        if (!conversationId || !token) return;
+
+        try {
+            await markMessagesAsRead(conversationId, token);
             dispatch(markAllMessagesRead(conversationId));
+        } catch (err) {
+            console.error('[useChatMessages] Error marking messages as read:', err);
         }
-    }, [conversationId, dispatch]);
+    }, [conversationId, token, dispatch]);
+
+    // Auto-load messages when conversation changes
+    useEffect(() => {
+        if (conversationId && token) {
+            refreshMessages();
+        }
+    }, [conversationId, token]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Auto-mark messages as read when conversation is active
     useEffect(() => {
@@ -128,7 +189,7 @@ export function useChatMessages(): UseChatMessagesReturn {
 
             return () => clearTimeout(timeout);
         }
-    }, [conversationId, messages.length, markAsRead]);
+    }, [conversationId, messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return {
         messages,

@@ -10,8 +10,11 @@ import {
     setAudioModeAsync,
     RecordingOptions,
     AudioQuality,
-    AudioModule
+    AudioModule,
+    RecordingPresets,
+    IOSOutputFormat
 } from 'expo-audio';
+import * as FileSystem from 'expo-file-system/legacy';
 import type { RecordingState, VoiceRecordingData } from '@/src/shared/types/chat';
 
 // ============================================================================
@@ -22,6 +25,7 @@ export interface AudioRecorderResult {
     uri: string;
     duration: number; // seconds
     meteringValues: number[];
+    size?: number; // bytes in file
 }
 
 export interface AudioPlaybackState {
@@ -37,28 +41,8 @@ export interface AudioPlaybackState {
 // ============================================================================
 
 const RECORDING_OPTIONS: RecordingOptions = {
+    ...RecordingPresets.HIGH_QUALITY,
     isMeteringEnabled: true,
-    sampleRate: 44100,
-    numberOfChannels: 1,
-    bitRate: 128000,
-    extension: '.m4a',
-    android: {
-        extension: '.m4a',
-        outputFormat: 'mpeg4',
-        audioEncoder: 'aac',
-    },
-    ios: {
-        extension: '.m4a',
-        outputFormat: 'mpeg4aac',
-        audioQuality: AudioQuality.HIGH,
-        linearPCMBitDepth: 16,
-        linearPCMIsBigEndian: false,
-        linearPCMIsFloat: false,
-    },
-    web: {
-        mimeType: 'audio/webm',
-        bitsPerSecond: 128000,
-    }
 };
 
 // ============================================================================
@@ -94,7 +78,7 @@ export const setAudioModeForPlayback = async (): Promise<void> => {
         allowsRecording: false,
         playsInSilentMode: true,
         shouldPlayInBackground: false,
-        interruptionMode: 'duckOthers',
+        interruptionMode: 'doNotMix',
         shouldRouteThroughEarpiece: false,
     });
 };
@@ -108,11 +92,6 @@ export const setAudioModeForPlayback = async (): Promise<void> => {
  * Handles voice recording lifecycle with metering for waveform visualization
  */
 export class AudioRecorderManager {
-    // Type is AudioRecorder but properly imported from where?
-    // AudioModule.AudioRecorder is the class constructor.
-    // The instance type is `AudioRecorder` (interface or class type).
-    // We can use `InstanceType<typeof AudioModule.AudioRecorder>` or assume `AudioRecorder` type is exported correctly.
-    // If we use `import { AudioRecorder } from 'expo-audio'` as a type, it works.
     private recording: InstanceType<typeof AudioModule.AudioRecorder> | null = null;
     private meteringValues: number[] = [];
     private meteringInterval: ReturnType<typeof setInterval> | null = null;
@@ -122,15 +101,39 @@ export class AudioRecorderManager {
      * Start recording
      */
     async startRecording(): Promise<void> {
+        console.log('[AudioRecorder] requestMicrophonePermission...');
         const hasPermission = await requestMicrophonePermission();
+        console.log('[AudioRecorder] Permission granted:', hasPermission);
         if (!hasPermission) {
             throw new Error('Microphone permission not granted');
         }
 
         await setAudioModeForRecording();
 
+        console.log('[AudioRecorder] Creating new AudioRecorder instance with preset HIGH_QUALITY...');
         this.recording = new AudioModule.AudioRecorder(RECORDING_OPTIONS);
+
+        try {
+            console.log('[AudioRecorder] Preparing to record...');
+            await this.recording.prepareToRecordAsync();
+            console.log('[AudioRecorder] Prepared.');
+        } catch (error) {
+            console.error('[AudioRecorder] Failed to prepare recording:', error);
+            // If prepare fails, we should probably stop here, but let's try to proceed 
+            // incase the constructor did it.
+            // But usually this means we can't record.
+        }
+
+        console.log('[AudioRecorder] Calling record()...');
         this.recording.record();
+
+        // Log status immediately to see if it started
+        try {
+            const status = this.recording.getStatus();
+            console.log('[AudioRecorder] Immediate Status:', status);
+        } catch (e) {
+            console.log('[AudioRecorder] Could not get immediate status:', e);
+        }
 
         this.startTime = Date.now();
         this.meteringValues = [];
@@ -142,9 +145,6 @@ export class AudioRecorderManager {
                     const status = this.recording.getStatus();
                     if (status.isRecording && status.metering !== undefined) {
                         // Normalize metering value (-160 to 0) to 0-1 range
-                        // Note: expo-audio metering range might differ, assuming typical dB values
-                        // If expo-audio returns 0-1 directly or different dB range, adjust here.
-                        // Assuming standard dB: -160 (silence) to 0 (max)
                         const normalized = Math.max(0, (status.metering + 60) / 60);
                         this.meteringValues.push(normalized);
                     }
@@ -188,14 +188,37 @@ export class AudioRecorderManager {
 
         try {
             const status = this.recording.getStatus();
-            await this.recording.stop();
-
-            const uri = this.recording.uri;
+            // Get URI before stopping to ensure we have a valid reference
+            let uri = this.recording.uri;
             const duration = status.durationMillis ? status.durationMillis / 1000 : 0;
 
-            this.recording = null;
+            console.log('[AudioRecorder] Initial URI:', uri);
+            console.log('[AudioRecorder] Recording status:', status);
+
+            if (uri) {
+                const infoBefore = await FileSystem.getInfoAsync(uri);
+                console.log('[AudioRecorder] File exists before stop:', infoBefore.exists);
+            }
+
+            await this.recording.stop();
+
+            // Increased delay to ensure file is ready
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Log URI after stop
+            if (this.recording) {
+                console.log('[AudioRecorder] URI after stop (property):', this.recording.uri);
+            }
+
+            // Try to get URI again if it was null initially
+            if (!uri && this.recording) {
+                uri = this.recording.uri;
+                console.log('[AudioRecorder] URI fetched after stop:', uri);
+            }
 
             if (!uri) {
+                console.error('[AudioRecorder] No URI found for recording');
+                this.recording = null;
                 return null;
             }
 
@@ -206,14 +229,42 @@ export class AudioRecorderManager {
                 Number.isFinite(v) ? v : 0
             );
 
-            return {
+            // Use the original URI directly instead of copying to avoid file access issues
+            console.log('[AudioRecorder] Checking existence of URI:', uri);
+
+            // Get file info for size from original location
+            const fileInfo = await FileSystem.getInfoAsync(uri);
+            const fileSize = (fileInfo as any).size || 0;
+
+            console.log('[AudioRecorder] Recording file info:', { uri, size: fileSize, exists: fileInfo.exists });
+
+            if (!fileInfo.exists) {
+                // Retry check once after a small delay
+                await new Promise(resolve => setTimeout(resolve, 200));
+                const retryInfo = await FileSystem.getInfoAsync(uri);
+                if (!retryInfo.exists) {
+                    console.error('[AudioRecorder] Original recording file does not exist after retry:', uri);
+                    this.recording = null;
+                    return null;
+                }
+                console.log('[AudioRecorder] File found after retry');
+            }
+
+            // Return the results
+            const result = {
                 uri,
                 duration,
                 meteringValues: cleanMetering,
+                size: fileSize
             };
-        } catch (error) {
+
             this.recording = null;
-            throw error;
+            return result;
+        } catch (error) {
+            console.error('[AudioRecorder] Error stopping recording:', error);
+            this.recording = null;
+            // Return null to indicate failure - let the UI handle it
+            return null;
         }
     }
 
@@ -286,6 +337,8 @@ export class AudioRecorderManager {
 export class AudioPlayerManager {
     private player: AudioPlayer | null = null;
     private onStatusUpdate: ((status: AudioPlaybackState) => void) | null = null;
+    public currentUri: string | null = null;
+    private isPlayingState: boolean = false;
 
     /**
      * Load and play audio
@@ -295,29 +348,40 @@ export class AudioPlayerManager {
         onStatusUpdate?: (status: AudioPlaybackState) => void
     ): Promise<void> {
         // Unload previous sound if exists
+        if (this.player && this.onStatusUpdate) {
+            this.onStatusUpdate({
+                isPlaying: false,
+                isLoaded: false,
+                positionMillis: 0,
+                durationMillis: 0,
+                progress: 0,
+            });
+        }
+
         await this.unload();
 
+        this.currentUri = uri;
         this.onStatusUpdate = onStatusUpdate || null;
-        await setAudioModeForPlayback();
+        try {
+            await setAudioModeForPlayback();
+        } catch (error) {
+            console.warn('[AudioPlayerManager] Failed to set audio mode:', error);
+        }
 
-        // createAudioPlayer(source, options)
-        this.player = createAudioPlayer(uri, {
-            updateInterval: 100 // More frequent updates for smooth progress
-        });
+        try {
+            // Create player with the audio source
+            this.player = createAudioPlayer(uri, {
+                updateInterval: 100, // More frequent updates for smooth progress
+            });
 
-        // Add listener for status updates
-        this.player.addListener('playbackStatusUpdate', this.handleStatusUpdate);
+            // Add listener for status updates
+            this.player.addListener('playbackStatusUpdate', this.handleStatusUpdate);
 
-        // Start playing
-        this.player.play();
-    }
-
-    /**
-     * Handle playback status updates
-     */
-    private handleStatusUpdate = (status: any) => {
-        // status is AudioStatus from expo-audio
-        if (!status.isLoaded) {
+            // Start playing
+            await this.player.play();
+            this.isPlayingState = true;
+        } catch (error) {
+            console.error('[AudioPlayerManager] Failed to load and play audio:', error);
             this.onStatusUpdate?.({
                 isPlaying: false,
                 isLoaded: false,
@@ -325,26 +389,54 @@ export class AudioPlayerManager {
                 durationMillis: 0,
                 progress: 0,
             });
+            this.currentUri = null;
+            this.isPlayingState = false;
+            throw error;
+        }
+    }
+
+    /**
+     * Handle playback status updates
+     */
+    private handleStatusUpdate = (status: any) => {
+        // console.log('[AudioPlayerManager] Status update:', status);
+
+        // status is AudioStatus from expo-audio
+        if (!status || !status.isLoaded) {
+            // console.log('[AudioPlayerManager] Audio not loaded or status null');
+            this.onStatusUpdate?.({
+                isPlaying: false,
+                isLoaded: false,
+                positionMillis: 0,
+                durationMillis: 0,
+                progress: 0,
+            });
+            this.isPlayingState = false;
             return;
         }
 
-        const durationMillis = status.duration * 1000;
-        const positionMillis = status.currentTime * 1000;
+        const durationMillis = status.duration ? status.duration * 1000 : 0;
+        const positionMillis = status.currentTime ? status.currentTime * 1000 : 0;
 
         const progress = durationMillis > 0
             ? positionMillis / durationMillis
             : 0;
 
-        this.onStatusUpdate?.({
-            isPlaying: status.playing,
-            isLoaded: true,
+        const playbackState: AudioPlaybackState = {
+            isPlaying: status.playing || false,
+            isLoaded: status.isLoaded || false,
             positionMillis,
             durationMillis,
             progress,
-        });
+        };
+
+        this.isPlayingState = status.playing || false;
+        // console.log('[AudioPlayerManager] Playback state:', playbackState);
+        this.onStatusUpdate?.(playbackState);
 
         // Auto-cleanup when finished
-        if (status.didJustFinish) {
+        if (status.didJustFinish || (progress >= 1 && status.playing === false)) {
+            console.log('[AudioPlayerManager] Playback finished, unloading');
             this.unload();
         }
     };
@@ -353,8 +445,13 @@ export class AudioPlayerManager {
      * Pause playback
      */
     async pause(): Promise<void> {
-        if (this.player) {
-            this.player.pause();
+        if (this.player && this.isPlayingState) {
+            try {
+                await this.player.pause();
+                this.isPlayingState = false;
+            } catch (error) {
+                console.error('[AudioPlayerManager] Failed to pause audio:', error);
+            }
         }
     }
 
@@ -362,8 +459,13 @@ export class AudioPlayerManager {
      * Resume playback
      */
     async resume(): Promise<void> {
-        if (this.player) {
-            this.player.play();
+        if (this.player && !this.isPlayingState) {
+            try {
+                await this.player.play();
+                this.isPlayingState = true;
+            } catch (error) {
+                console.error('[AudioPlayerManager] Failed to resume audio:', error);
+            }
         }
     }
 
@@ -372,10 +474,16 @@ export class AudioPlayerManager {
      */
     async togglePlayback(): Promise<void> {
         if (this.player) {
-            if (this.player.playing) {
-                this.player.pause();
-            } else {
-                this.player.play();
+            try {
+                if (this.isPlayingState) {
+                    await this.player.pause();
+                    this.isPlayingState = false;
+                } else {
+                    await this.player.play();
+                    this.isPlayingState = true;
+                }
+            } catch (error) {
+                console.error('[AudioPlayerManager] Failed to toggle playback:', error);
             }
         }
     }
@@ -393,6 +501,17 @@ export class AudioPlayerManager {
      * Unload sound
      */
     async unload(): Promise<void> {
+        // Notify current listener that we are stopping
+        if (this.onStatusUpdate) {
+            this.onStatusUpdate({
+                isPlaying: false,
+                isLoaded: false,
+                positionMillis: 0,
+                durationMillis: 0,
+                progress: 0,
+            });
+        }
+
         if (this.player) {
             try {
                 // remove() releases resources
@@ -403,6 +522,8 @@ export class AudioPlayerManager {
             this.player = null;
         }
         this.onStatusUpdate = null;
+        this.currentUri = null;
+        this.isPlayingState = false;
     }
 }
 

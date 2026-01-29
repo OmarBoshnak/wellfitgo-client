@@ -20,7 +20,7 @@ export interface UseVoiceRecordingReturn {
     startRecording: () => Promise<void>;
     pauseRecording: () => Promise<void>;
     resumeRecording: () => Promise<void>;
-    stopRecording: () => Promise<{ uri: string; duration: number } | null>;
+    stopRecording: () => Promise<{ uri: string; duration: number; meteringValues: number[] } | null>;
     cancelRecording: () => Promise<void>;
     // Helpers
     isRecording: boolean;
@@ -136,7 +136,7 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
     /**
      * Stop recording and return result
      */
-    const stopRecording = useCallback(async (): Promise<{ uri: string; duration: number } | null> => {
+    const stopRecording = useCallback(async (): Promise<{ uri: string; duration: number; meteringValues: number[] } | null> => {
         stopDurationTimer();
         stopMeteringUpdates();
 
@@ -148,6 +148,7 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
                 return {
                     uri: result.uri,
                     duration: result.duration || duration,
+                    meteringValues: result.meteringValues,
                 };
             }
             return null;

@@ -3,7 +3,7 @@
  * @description Manages calendar state and navigation for meals
  */
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/src/shared/store';
 import {
     selectCurrentMonth,
@@ -22,9 +22,12 @@ import {
     canNavigateToNextMonth,
     groupDaysIntoWeeks,
     getWeekdayHeaders,
+    toISODateString,
 } from '@/src/shared/utils/dateTime/mealCalendarHelpers';
 import { formatCalendarHeader } from '@/src/shared/utils/dateTime/mealDateFormatting';
 import { MealHistory, DayMealStatus } from '@/src/shared/types/meals';
+import { getMealHistory } from '@/src/shared/services/backend/api';
+import { selectToken } from '@/src/shared/store/selectors/auth.selectors';
 
 /**
  * Hook for calendar navigation and history
@@ -39,9 +42,12 @@ export function useMealCalendar() {
     const completions = useAppSelector(selectCompletions);
     const meals = useAppSelector(selectMeals);
     const plan = useAppSelector(selectMealPlan);
+    const token = useAppSelector(selectToken);
+
+    const [remoteMealHistory, setRemoteMealHistory] = useState<MealHistory | null>(null);
 
     // Calculate meal history for calendar display
-    const mealHistory = useMemo((): MealHistory => {
+    const localMealHistory = useMemo((): MealHistory => {
         const history: MealHistory = {};
         const totalMealsPerDay = meals.length;
 
@@ -63,6 +69,50 @@ export function useMealCalendar() {
 
         return history;
     }, [completions, meals]);
+
+    const mealHistory = useMemo(() => {
+        return remoteMealHistory || localMealHistory;
+    }, [remoteMealHistory, localMealHistory]);
+
+    const mapHistoryResponse = useCallback((items?: DayMealStatus[]): MealHistory => {
+        const history: MealHistory = {};
+        if (!Array.isArray(items)) {
+            return history;
+        }
+
+        items.forEach((day) => {
+            history[day.date] = day;
+        });
+
+        return history;
+    }, []);
+
+    useEffect(() => {
+        if (!token) {
+            setRemoteMealHistory(null);
+            return;
+        }
+
+        let isActive = true;
+        const startDate = new Date(currentYear, currentMonth, 1);
+        const endDate = new Date(currentYear, currentMonth + 1, 0);
+        const start = toISODateString(startDate);
+        const end = toISODateString(endDate);
+
+        getMealHistory(token, start, end)
+            .then((response) => {
+                if (!isActive) return;
+                setRemoteMealHistory(mapHistoryResponse(response?.data));
+            })
+            .catch(() => {
+                if (!isActive) return;
+                setRemoteMealHistory(null);
+            });
+
+        return () => {
+            isActive = false;
+        };
+    }, [token, currentMonth, currentYear, mapHistoryResponse]);
 
     // Generate calendar days
     const calendarDays = useMemo(() => {

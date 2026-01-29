@@ -28,7 +28,16 @@ import {
     selectToken,
 } from '@/src/shared/store/selectors/auth.selectors';
 import { getGreeting } from '@/src/shared/utils/homeData';
-import { getClientProfile, getIdealWeight, ClientProfileResponse, IdealWeightResponse } from '@/src/shared/services/backend/api';
+import {
+    getAssignedMeals,
+    getClientProfile,
+    getIdealWeight,
+    updateWaterIntake,
+    getPlanProgress,
+    AssignedMealApiItem,
+    ClientProfileResponse,
+    IdealWeightResponse,
+} from '@/src/shared/services/backend/api';
 import {
     WeightProgress,
     DailyNutrition,
@@ -36,6 +45,7 @@ import {
     DEFAULT_PLAN_PROGRESS,
     DEFAULT_WATER_INTAKE,
 } from '@/src/shared/types/home';
+import { calculateMealsTotals } from '@/src/shared/utils/mealMacros';
 
 /**
  * Main hook for HomeScreen data management
@@ -91,11 +101,12 @@ export function useHomeData() {
     // Nutrition computation
     const nutrition = useMemo((): DailyNutrition => {
         const completed = meals.filter(m => m.isCompleted);
+        const totals = calculateMealsTotals(completed);
         return {
-            calories: completed.reduce((sum, m) => sum + m.calories, 0),
-            protein: completed.reduce((sum, m) => sum + m.protein, 0),
-            carbs: completed.reduce((sum, m) => sum + m.carbs, 0),
-            fat: completed.reduce((sum, m) => sum + m.fat, 0),
+            calories: totals.calories,
+            protein: totals.protein,
+            carbs: totals.carbs,
+            fat: totals.fat,
             targetCalories: 1400,
             targetProtein: 100,
             targetCarbs: 112,
@@ -144,8 +155,50 @@ export function useHomeData() {
         };
     }, []);
 
+    const buildWaterIntake = useCallback((profile?: ClientProfileResponse | null) => {
+        const normalizedProfile = (profile as any)?.data && typeof (profile as any).data === 'object'
+            ? (profile as any).data
+            : profile;
+        const waterIntakeData = normalizedProfile?.waterIntake;
+
+        return {
+            ...DEFAULT_WATER_INTAKE,
+            ...(waterIntakeData && typeof waterIntakeData === 'object' ? waterIntakeData : {}),
+        };
+    }, []);
+
+    const buildPlanProgress = useCallback((profile?: ClientProfileResponse | null) => {
+        const normalizedProfile = (profile as any)?.data && typeof (profile as any).data === 'object'
+            ? (profile as any).data
+            : profile;
+        const planProgressData = normalizedProfile?.planProgress;
+
+        return {
+            ...DEFAULT_PLAN_PROGRESS,
+            ...(planProgressData && typeof planProgressData === 'object' ? planProgressData : {}),
+        };
+    }, []);
+
     // State for user profile data
     const [userProfile, setUserProfile] = useState<ClientProfileResponse | null>(null);
+
+    const mapAssignedMeals = useCallback((items?: AssignedMealApiItem[]) => (
+        Array.isArray(items)
+            ? items.map((meal) => ({
+                id: meal.id,
+                name: meal.name,
+                nameAr: meal.nameAr || meal.name,
+                type: meal.type,
+                calories: meal.calories,
+                protein: meal.protein ?? 0,
+                carbs: meal.carbs ?? 0,
+                fat: meal.fat ?? 0,
+                time: meal.time,
+                isCompleted: meal.isCompleted,
+                items: meal.items ?? [],
+            }))
+            : []
+    ), []);
 
     // Fetch data
     const fetchData = useCallback(async () => {
@@ -162,9 +215,10 @@ export function useHomeData() {
             }
 
             console.log('[useHomeData] Making API calls...');
-            const [profile, idealWeight] = await Promise.all([
+            const [profile, idealWeight, assignedMeals] = await Promise.all([
                 getClientProfile(token),
                 getIdealWeight(token),
+                getAssignedMeals(token),
             ]);
 
             console.log('[useHomeData] API responses received:', { profile, idealWeight });
@@ -174,15 +228,15 @@ export function useHomeData() {
 
             const mappedWeightData = buildWeightData(profile, idealWeight);
             dispatch(setWeightData(mappedWeightData));
-            dispatch(setMeals([]));
-            dispatch(setWaterIntake({ ...DEFAULT_WATER_INTAKE }));
-            dispatch(setPlanProgress({ ...DEFAULT_PLAN_PROGRESS }));
+            dispatch(setMeals(mapAssignedMeals(assignedMeals?.data)));
+            dispatch(setWaterIntake(buildWaterIntake(profile)));
+            dispatch(setPlanProgress(buildPlanProgress(profile)));
             dispatch(setLoading(false));
         } catch (err) {
             console.error('[useHomeData] Error fetching data:', err);
             dispatch(setError('حدث خطأ أثناء تحميل البيانات'));
         }
-    }, [dispatch, token, buildWeightData]);
+    }, [dispatch, token, buildWeightData, buildWaterIntake, buildPlanProgress, mapAssignedMeals]);
 
     // Refresh handler
     const refresh = useCallback(async () => {
@@ -198,13 +252,43 @@ export function useHomeData() {
     }, [dispatch]);
 
     // Water handlers
+    const persistWaterDelta = useCallback(async (delta: number) => {
+        if (!token) {
+            if (delta > 0) {
+                dispatch(addWater());
+            } else {
+                dispatch(removeWater());
+            }
+            return;
+        }
+
+        try {
+            const response = await updateWaterIntake({ delta }, token);
+            if (response?.waterIntake) {
+                dispatch(setWaterIntake({
+                    ...DEFAULT_WATER_INTAKE,
+                    ...response.waterIntake,
+                }));
+                return;
+            }
+        } catch (err) {
+            console.error('[useHomeData] Error updating water intake:', err);
+        }
+
+        if (delta > 0) {
+            dispatch(addWater());
+        } else {
+            dispatch(removeWater());
+        }
+    }, [dispatch, token]);
+
     const handleAddWater = useCallback(() => {
-        dispatch(addWater());
-    }, [dispatch]);
+        persistWaterDelta(waterIntake.glassSize || DEFAULT_WATER_INTAKE.glassSize);
+    }, [persistWaterDelta, waterIntake.glassSize]);
 
     const handleRemoveWater = useCallback(() => {
-        dispatch(removeWater());
-    }, [dispatch]);
+        persistWaterDelta(-(waterIntake.glassSize || DEFAULT_WATER_INTAKE.glassSize));
+    }, [persistWaterDelta, waterIntake.glassSize]);
 
     // Initial fetch
     useEffect(() => {

@@ -27,6 +27,12 @@ export default function PaymentLayout() {
                     gestureEnabled: false,
                 }}
             />
+            <Stack.Screen
+                name="manage-subscription"
+                options={{
+                    animation: 'slide_from_right',
+                }}
+            />
         </Stack>
     );
 }

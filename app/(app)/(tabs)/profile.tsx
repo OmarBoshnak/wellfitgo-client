@@ -48,6 +48,7 @@ export default function ProfileScreen() {
     // Hooks
     const {
         profile,
+        coachPlan,
         weightProgress,
         isLoading,
         error,
@@ -57,7 +58,6 @@ export default function ProfileScreen() {
 
     const {
         subscription,
-        handleUpgrade,
         handleManage,
     } = useSubscription();
 
@@ -228,7 +228,7 @@ export default function ProfileScreen() {
 
                 {/* Plan Summary */}
                 <PlanSummary
-                    plan={null} // Will be populated when coachPlan is available
+                    plan={coachPlan}
                     onMessageCoach={handleMessageCoach}
                     onViewPlan={handleViewPlan}
                 />
@@ -237,7 +237,6 @@ export default function ProfileScreen() {
                 <SubscriptionCard
                     subscription={subscription}
                     onManage={handleManage}
-                    onUpgrade={handleUpgrade}
                 />
 
                 {/* Personal Info */}

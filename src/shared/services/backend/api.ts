@@ -3,6 +3,9 @@
  * @description Handles communication with the Node.js backend
  */
 
+import { MealIngredient, WaterIntake, PlanProgress } from '@/src/shared/types/home';
+import { DayMealStatus } from '@/src/shared/types/meals';
+
 const BACKEND_URL = process.env.EXPO_PUBLIC_API_URL || 'https://wellfitgo-backend-97b72a680866.herokuapp.com';
 
 export interface BackendResponse {
@@ -12,6 +15,10 @@ export interface BackendResponse {
   redirectTo?: string;
   data?: any;
   error?: string;
+}
+
+export interface WaterIntakeResponse {
+  waterIntake?: WaterIntake;
 }
 
 export interface ClientProfileResponse {
@@ -36,6 +43,8 @@ export interface ClientProfileResponse {
   onboardingCompleted?: boolean;
   healthProfileCompleted?: boolean;
   subscriptionStatus?: string;
+  waterIntake?: WaterIntake;
+  planProgress?: PlanProgress;
 }
 
 export interface IdealWeightResponse {
@@ -46,6 +55,115 @@ export interface IdealWeightResponse {
   };
   message?: string;
   error?: string;
+}
+
+export interface AssignedMealApiItem {
+  id: string;
+  name: string;
+  nameAr?: string;
+  type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  calories: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  time: string;
+  isCompleted: boolean;
+  notes?: string;
+  items?: MealIngredient[];
+}
+
+export interface AssignedMealsResponse extends BackendResponse {
+  data?: AssignedMealApiItem[];
+}
+
+export interface MealPlanSummaryResponse extends BackendResponse {
+  data?: {
+    doctor?: {
+      id?: string;
+      name?: string;
+      nameAr?: string;
+      avatarUrl?: string;
+    } | null;
+    mealsCompleted?: number;
+    totalMeals?: number;
+    planMealsCompleted?: number;
+    planTotalMeals?: number;
+  };
+}
+
+export interface MealHistoryResponse extends BackendResponse {
+  data?: DayMealStatus[];
+}
+
+export interface MealCompletionApiItem {
+  id?: string;
+  mealId?: string;
+  date?: string;
+  completedAt?: number | null;
+  selectedOptions?: Record<string, string[]>;
+}
+
+export interface MealCompletionsResponse extends BackendResponse {
+  data?: {
+    completions?: MealCompletionApiItem[];
+    selections?: Record<string, Record<string, string[]>>;
+  };
+}
+
+export interface UpsertMealCompletionResponse extends BackendResponse {
+  data?: MealCompletionApiItem;
+}
+
+export interface ChatConversationResponse extends BackendResponse {
+  data?: {
+    id?: string;
+    doctorId?: string;
+    clientId?: string;
+    name?: string;
+    avatar?: string | null;
+    isOnline?: boolean;
+    lastMessage?: string;
+    lastMessageAt?: string;
+    unreadCount?: number;
+  };
+}
+
+export interface SendChatMessageResponse extends BackendResponse {
+  data?: {
+    _id?: string;
+    conversationId?: string;
+    senderId?: string;
+    senderRole?: 'doctor' | 'client';
+    content?: string;
+    messageType?: 'text' | 'voice' | 'image' | 'document';
+    mediaUrl?: string;
+    mediaDuration?: number;
+    meteringValues?: number[];
+    createdAt?: string;
+  };
+}
+
+export interface ChatMessageApiItem {
+  _id: string;
+  conversationId: string;
+  senderId: string;
+  senderRole: 'doctor' | 'client';
+  content: string;
+  messageType: 'text' | 'voice' | 'image' | 'document';
+  mediaUrl?: string;
+  mediaDuration?: number;
+  meteringValues?: number[];
+  replyToId?: string;
+  isDeleted: boolean;
+  isEdited: boolean;
+  isReadByDoctor: boolean;
+  isReadByClient: boolean;
+  createdAt: string;
+}
+
+export interface ChatMessagesResponse extends BackendResponse {
+  data?: ChatMessageApiItem[];
+  nextCursor?: string | null;
 }
 
 // ============================================================================
@@ -336,6 +454,156 @@ export const assignChatDoctor = async (
 };
 
 /**
+ * Get or create a chat conversation with a doctor
+ */
+export const getOrCreateConversation = async (
+  doctorId: string,
+  token?: string
+): Promise<ChatConversationResponse> => {
+  return apiCall('/api/chat/conversations', {
+    method: 'POST',
+    body: JSON.stringify({ doctorId }),
+  }, token) as Promise<ChatConversationResponse>;
+};
+
+/**
+ * Send a chat message in a conversation
+ */
+export const sendChatMessage = async (
+  conversationId: string,
+  data: {
+    content: string;
+    messageType?: 'text' | 'voice' | 'image' | 'document';
+    mediaUrl?: string;
+    mediaDuration?: number;
+    meteringValues?: number[];
+    voiceMessage?: any; // Added for voice message details
+    replyToId?: string;
+  },
+  token?: string
+): Promise<SendChatMessageResponse> => {
+  return apiCall(`/api/chat/conversations/${conversationId}/messages`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }, token) as Promise<SendChatMessageResponse>;
+};
+
+/**
+ * Upload voice message to backend
+ */
+export const uploadVoiceMessage = async (
+  uri: string,
+  duration: number,
+  token?: string
+): Promise<{ success: boolean; url?: string; voiceMessage?: any; error?: string }> => {
+  try {
+    const formData = new FormData();
+    // @ts-ignore
+    formData.append('audio', {
+      uri,
+      name: 'voice_message.m4a',
+      type: 'audio/m4a',
+    });
+    formData.append('duration', duration.toString());
+
+    const url = `${BACKEND_URL}/api/chat/audio/upload-voice`;
+
+    console.log('[Backend API] Uploading voice message to:', url);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : '',
+        // 'Content-Type': 'multipart/form-data', // Let fetch set boundary automatically
+      },
+      body: formData,
+    });
+
+    const responseText = await response.text();
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse upload response:', responseText);
+      return { success: false, error: 'Invalid server response' };
+    }
+
+    if (!response.ok) {
+      return { success: false, error: data.error || data.message || 'Upload failed' };
+    }
+
+    return {
+      success: true,
+      url: data.url,
+      voiceMessage: data.voiceMessage
+    };
+
+  } catch (error) {
+    console.error('Error uploading voice message:', error);
+    return { success: false, error: (error as Error).message };
+  }
+};
+
+/**
+ * Get chat messages for a conversation (paginated)
+ */
+export const getChatMessages = async (
+  conversationId: string,
+  token?: string,
+  cursor?: string,
+  limit: number = 50
+): Promise<ChatMessagesResponse> => {
+  const params = new URLSearchParams();
+  if (cursor) params.append('cursor', cursor);
+  params.append('limit', limit.toString());
+  const query = params.toString();
+  return apiCall(`/api/chat/conversations/${conversationId}/messages${query ? `?${query}` : ''}`, {}, token) as Promise<ChatMessagesResponse>;
+};
+
+/**
+ * Mark all messages in a conversation as read
+ */
+export const markMessagesAsRead = async (
+  conversationId: string,
+  token?: string
+): Promise<BackendResponse> => {
+  return apiCall(`/api/chat/conversations/${conversationId}/read`, {
+    method: 'PUT',
+  }, token);
+};
+
+/**
+ * Delete a message from a conversation
+ */
+export const deleteChatMessage = async (
+  conversationId: string,
+  messageId: string,
+  token?: string
+): Promise<BackendResponse> => {
+  return apiCall(`/api/chat/messages/${messageId}`, {
+    method: 'DELETE',
+  }, token);
+};
+
+/**
+ * Edit a message in a conversation
+ */
+export const editChatMessage = async (
+  conversationId: string,
+  messageId: string,
+  data: {
+    content: string;
+  },
+  token?: string
+): Promise<BackendResponse> => {
+  return apiCall(`/api/chat/messages/${messageId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }, token);
+};
+
+/**
  * Update client profile (self)
  */
 export const updateClientProfile = async (
@@ -367,6 +635,101 @@ export const getIdealWeight = async (
 };
 
 /**
+ * Get water intake for current client
+ */
+export const getWaterIntake = async (
+  token?: string
+): Promise<WaterIntakeResponse> => {
+  return apiCall('/api/clients/water-intake', {}, token) as Promise<WaterIntakeResponse>;
+};
+
+/**
+ * Update water intake for current client
+ */
+export const updateWaterIntake = async (
+  data: {
+    delta?: number;
+    current?: number;
+    target?: number;
+    glassSize?: number;
+  },
+  token?: string
+): Promise<WaterIntakeResponse> => {
+  return apiCall('/api/clients/water-intake', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }, token) as Promise<WaterIntakeResponse>;
+};
+
+/**
+ * Get assigned meals for current client
+ */
+export const getAssignedMeals = async (
+  token?: string,
+  date?: string
+): Promise<AssignedMealsResponse> => {
+  const query = date ? `?date=${encodeURIComponent(date)}` : '';
+  return apiCall(`/api/patient/meals/assigned${query}`, {}, token) as Promise<AssignedMealsResponse>;
+};
+
+/**
+ * Get meal history for current client
+ */
+export const getMealHistory = async (
+  token?: string,
+  start?: string,
+  end?: string
+): Promise<MealHistoryResponse> => {
+  const params = new URLSearchParams();
+  if (start) params.append('start', start);
+  if (end) params.append('end', end);
+  const query = params.toString();
+  return apiCall(`/api/patient/meals/history${query ? `?${query}` : ''}`, {}, token) as Promise<MealHistoryResponse>;
+};
+
+/**
+ * Get meal plan summary for current client
+ */
+export const getMealPlanSummary = async (
+  token?: string,
+  date?: string
+): Promise<MealPlanSummaryResponse> => {
+  const query = date ? `?date=${encodeURIComponent(date)}` : '';
+  return apiCall(`/api/patient/meals/summary${query}`, {}, token) as Promise<MealPlanSummaryResponse>;
+};
+
+/**
+ * Get meal completions + selections for a date
+ */
+export const getMealCompletions = async (
+  token?: string,
+  date?: string
+): Promise<MealCompletionsResponse> => {
+  const query = date ? `?date=${encodeURIComponent(date)}` : '';
+  return apiCall(`/api/patient/meals/completions${query}`, {}, token) as Promise<MealCompletionsResponse>;
+};
+
+/**
+ * Upsert meal completion or selections
+ */
+export const upsertMealCompletion = async (
+  data: {
+    mealId: string;
+    date: string;
+    mealType?: string;
+    completed?: boolean;
+    completedAt?: number;
+    selectedOptions?: Record<string, string[]>;
+  },
+  token?: string
+): Promise<UpsertMealCompletionResponse> => {
+  return apiCall('/api/patient/meals/completions', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }, token) as Promise<UpsertMealCompletionResponse>;
+};
+
+/**
  * Update user profile
  */
 export const updateUser = async (
@@ -378,6 +741,32 @@ export const updateUser = async (
     method: 'PUT',
     body: JSON.stringify(data),
   }, token);
+};
+
+/**
+ * Get plan progress for current client
+ */
+export const getPlanProgress = async (
+  token?: string
+): Promise<{ planProgress?: PlanProgress }> => {
+  return apiCall('/api/clients/plan-progress', {}, token) as Promise<{ planProgress?: PlanProgress }>;
+};
+
+/**
+ * Update plan progress for current client
+ */
+export const updatePlanProgress = async (
+  data: {
+    completedDays?: number;
+    totalDays?: number;
+    currentDay?: number;
+  },
+  token?: string
+): Promise<{ planProgress?: PlanProgress }> => {
+  return apiCall('/api/clients/plan-progress', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }, token) as Promise<{ planProgress?: PlanProgress }>;
 };
 
 export default {
@@ -396,6 +785,21 @@ export default {
   updateUser,
   updateClientProfile,
   getClientProfile,
+  getIdealWeight,
+  getWaterIntake,
+  updateWaterIntake,
+  getAssignedMeals,
+  getMealHistory,
+  getMealPlanSummary,
+  getMealCompletions,
+  upsertMealCompletion,
+  getOrCreateConversation,
+  sendChatMessage,
+  getChatMessages,
+  markMessagesAsRead,
+  deleteChatMessage,
+  editChatMessage,
+  uploadVoiceMessage,
 };
 
 

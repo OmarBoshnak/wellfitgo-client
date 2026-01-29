@@ -7,11 +7,10 @@ import { useCallback, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/src/shared/store';
 import {
     selectActiveConversationMessages,
-    editMessage as editMessageAction,
-    deleteMessage as deleteMessageAction,
 } from '@/src/shared/store/slices/chatSlice';
+import { useMessageManagement } from './useMessageManagement';
 import type { Message, MessageAction } from '@/src/shared/types/chat';
-import { CURRENT_USER_ID } from '@/src/shared/utils/chat/mockData';
+import { selectUser } from '@/src/shared/store/selectors/auth.selectors';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 
@@ -49,6 +48,8 @@ export interface UseMessageActionsReturn {
 export function useMessageActions(): UseMessageActionsReturn {
     const dispatch = useAppDispatch();
     const messages = useAppSelector(selectActiveConversationMessages);
+    const user = useAppSelector(selectUser);
+    const { deleteMessageById, editMessageById } = useMessageManagement();
 
     const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
     const [replyingTo, setReplyingToState] = useState<Message | null>(null);
@@ -60,18 +61,18 @@ export function useMessageActions(): UseMessageActionsReturn {
      */
     const canEdit = useCallback((message: Message): boolean => {
         return (
-            message.senderId === CURRENT_USER_ID &&
+            message.senderId === user?._id &&
             message.messageType === 'text' &&
             !message.isDeleted
         );
-    }, []);
+    }, [user?._id]);
 
     /**
      * Check if user can delete message
      */
     const canDelete = useCallback((message: Message): boolean => {
-        return message.senderId === CURRENT_USER_ID && !message.isDeleted;
-    }, []);
+        return message.senderId === user?._id && !message.isDeleted;
+    }, [user?._id]);
 
     /**
      * Get available actions for a message
@@ -157,16 +158,18 @@ export function useMessageActions(): UseMessageActionsReturn {
     /**
      * Submit edited message
      */
-    const submitEdit = useCallback((newContent: string) => {
+    const submitEdit = useCallback(async (newContent: string) => {
         if (editingMessage && newContent.trim()) {
-            dispatch(editMessageAction({
-                messageId: editingMessage.id,
-                newContent: newContent.trim(),
-            }));
-            setEditingMessage(null);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            try {
+                await editMessageById(editingMessage.id, newContent.trim());
+                setEditingMessage(null);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } catch (error) {
+                console.error('[useMessageActions] Failed to edit message:', error);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            }
         }
-    }, [editingMessage, dispatch]);
+    }, [editingMessage, editMessageById]);
 
     /**
      * Handle action selection
@@ -194,8 +197,13 @@ export function useMessageActions(): UseMessageActionsReturn {
 
             case 'delete':
                 if (canDelete(selectedMessage)) {
-                    dispatch(deleteMessageAction(selectedMessage.id));
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    try {
+                        await deleteMessageById(selectedMessage.id);
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    } catch (error) {
+                        console.error('[useMessageActions] Failed to delete message:', error);
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                    }
                 }
                 break;
 
@@ -206,7 +214,7 @@ export function useMessageActions(): UseMessageActionsReturn {
 
         hideActionSheet();
         clearSelection();
-    }, [selectedMessage, setReplyingTo, canEdit, canDelete, startEditing, hideActionSheet, clearSelection, dispatch]);
+    }, [selectedMessage, setReplyingTo, canEdit, canDelete, startEditing, hideActionSheet, clearSelection, deleteMessageById]);
 
     return {
         selectedMessage,

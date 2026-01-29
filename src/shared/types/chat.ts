@@ -10,7 +10,7 @@
 /**
  * Message type enumeration
  */
-export type MessageType = 'text' | 'image' | 'voice';
+export type MessageType = 'text' | 'image' | 'voice' | 'document';
 
 /**
  * Message delivery status
@@ -26,6 +26,7 @@ export interface Message {
     content: string;
     messageType: MessageType;
     senderId: string;
+    senderRole?: 'doctor' | 'client';
     createdAt: string;
     updatedAt?: string;
     status: MessageStatus;
@@ -38,6 +39,7 @@ export interface Message {
     mediaWidth?: number; // For images
     mediaHeight?: number; // For images
     mediaThumbnail?: string; // For images - low-res preview
+    meteringValues?: number[]; // For voice messages - waveform data
     // Optimistic UI
     isOptimistic?: boolean;
     tempId?: string; // For matching optimistic updates
@@ -224,12 +226,9 @@ export interface VoiceRecordingData {
  * Socket event payloads for real-time messaging
  */
 export interface SocketEvents {
-    'message:new': Message;
-    'message:updated': Message;
-    'message:deleted': { messageId: string; conversationId: string };
-    'typing:start': TypingIndicator;
-    'typing:stop': TypingIndicator;
-    'user:online': { userId: string };
-    'user:offline': { userId: string; lastSeen: string };
-    'message:read': { messageId: string; readBy: string; readAt: string };
+    new_message: Message;
+    message_edited: { messageId: string; conversationId: string; content: string; isEdited: boolean; updatedAt?: string };
+    message_deleted: { messageId: string; conversationId: string };
+    messages_read: { conversationId: string; readBy: 'doctor' | 'client'; readAt: string };
+    user_typing: { conversationId: string; userId: string; isTyping: boolean };
 }

@@ -3,6 +3,8 @@
  * @description Upload handling with progress tracking
  */
 
+import * as FileSystem from 'expo-file-system/legacy';
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -65,8 +67,7 @@ export const getFileInfo = async (
     uri: string
 ): Promise<{ size: number; name: string; type: string } | null> => {
     try {
-        const { getInfoAsync } = await import('expo-file-system');
-        const info = await getInfoAsync(uri);
+        const info = await FileSystem.getInfoAsync(uri);
 
         if (!info.exists) {
             return null;

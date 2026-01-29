@@ -3,20 +3,25 @@
  * @description Manages meal completion state with optimistic updates
  */
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useAppDispatch, useAppSelector } from '@/src/shared/store';
 import {
     selectCompletions,
+    selectSelections,
     selectSelectedDate,
     selectDayOffset,
     selectMealPlan,
     selectMealsForSelectedDate,
     selectCompletionProgress,
+    setCompletions,
+    setSelections,
     toggleMealCompletion,
 } from '@/src/shared/store/slices/mealsSlice';
 import { toISODateString } from '@/src/shared/utils/dateTime/mealCalendarHelpers';
+import { getMealCompletions, upsertMealCompletion } from '@/src/shared/services/backend/api';
+import { selectToken } from '@/src/shared/store/selectors/auth.selectors';
 
 /**
  * Hook for managing meal completions with haptics
@@ -26,11 +31,13 @@ export function useMealCompletions() {
 
     // Selectors
     const completions = useAppSelector(selectCompletions);
+    const selections = useAppSelector(selectSelections);
     const selectedDate = useAppSelector(selectSelectedDate);
     const dayOffset = useAppSelector(selectDayOffset);
     const plan = useAppSelector(selectMealPlan);
     const mealsForDate = useAppSelector(selectMealsForSelectedDate);
     const progress = useAppSelector(selectCompletionProgress);
+    const token = useAppSelector(selectToken);
 
     // Calculate current date based on format
     const currentDate = useMemo(() => {
@@ -52,12 +59,51 @@ export function useMealCompletions() {
         return completions.find(c => c.mealId === mealId && c.date === currentDate);
     }, [completions, currentDate]);
 
+    useEffect(() => {
+        if (!token) {
+            return;
+        }
+
+        let isActive = true;
+
+        getMealCompletions(token, currentDate)
+            .then((response) => {
+                if (!isActive) return;
+                const completionItems = Array.isArray(response?.data?.completions)
+                    ? response?.data?.completions
+                    : [];
+                const normalizedCompletions = completionItems
+                    .filter((item) => item?.mealId && item?.date && typeof item?.completedAt === 'number')
+                    .map((item) => ({
+                        id: item?.id || `comp_${item?.mealId}_${item?.date}`,
+                        mealId: item!.mealId!,
+                        date: item!.date!,
+                        completedAt: item!.completedAt as number,
+                        selectedOptions: item?.selectedOptions,
+                    }));
+
+                dispatch(setCompletions(normalizedCompletions));
+
+                const selectionsMap = response?.data?.selections;
+                if (selectionsMap && typeof selectionsMap === 'object') {
+                    dispatch(setSelections(selectionsMap));
+                }
+            })
+            .catch(() => {
+                if (!isActive) return;
+            });
+
+        return () => {
+            isActive = false;
+        };
+    }, [token, currentDate, dispatch]);
+
     // Toggle meal completion with haptic feedback
     const toggleCompletion = useCallback(async (mealId: string) => {
+        const isCurrentlyCompleted = isMealCompleted(mealId);
         // Trigger haptic feedback
         if (Platform.OS !== 'web') {
             try {
-                const isCurrentlyCompleted = isMealCompleted(mealId);
                 if (isCurrentlyCompleted) {
                     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 } else {
@@ -70,7 +116,27 @@ export function useMealCompletions() {
 
         // Optimistic update
         dispatch(toggleMealCompletion({ mealId, date: currentDate }));
-    }, [dispatch, currentDate, isMealCompleted]);
+
+        if (!token) {
+            return;
+        }
+
+        const meal = mealsForDate.find(m => m.id === mealId);
+        const completed = !isCurrentlyCompleted;
+
+        try {
+            await upsertMealCompletion({
+                mealId,
+                date: currentDate,
+                mealType: meal?.type,
+                completed,
+                completedAt: completed ? Date.now() : undefined,
+                selectedOptions: selections[mealId],
+            }, token);
+        } catch {
+            dispatch(toggleMealCompletion({ mealId, date: currentDate }));
+        }
+    }, [dispatch, currentDate, isMealCompleted, token, mealsForDate, selections]);
 
     // Complete all meals
     const completeAll = useCallback(async () => {
@@ -87,7 +153,22 @@ export function useMealCompletions() {
         for (const meal of incompleteMeals) {
             dispatch(toggleMealCompletion({ mealId: meal.id, date: currentDate }));
         }
-    }, [dispatch, mealsForDate, isMealCompleted, currentDate]);
+
+        if (token && incompleteMeals.length > 0) {
+            await Promise.all(
+                incompleteMeals.map((meal) => (
+                    upsertMealCompletion({
+                        mealId: meal.id,
+                        date: currentDate,
+                        mealType: meal.type,
+                        completed: true,
+                        completedAt: Date.now(),
+                        selectedOptions: selections[meal.id],
+                    }, token).catch(() => null)
+                ))
+            );
+        }
+    }, [dispatch, mealsForDate, isMealCompleted, currentDate, token, selections]);
 
     // Get meals with completion status
     const mealsWithStatus = useMemo(() => {

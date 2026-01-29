@@ -117,7 +117,7 @@ function QuickActions({
                         />
                     </View>
                     <Text style={styles.glassesText}>
-                        {targetGlasses}/{glassesConsumed} كوب 
+                        {targetGlasses}/{glassesConsumed} كوب
                     </Text>
                 </View>
 
@@ -174,7 +174,6 @@ function QuickActions({
                 </View>
             </View>
 
-            {/* Plan Progress Card */}
             <Pressable
                 onPress={handleViewPlan}
                 onPressIn={() => { planScale.value = withSpring(0.98); }}
@@ -225,7 +224,7 @@ const styles = StyleSheet.create({
     waterHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent:'space-between',
+        justifyContent: 'space-between',
         marginBottom: verticalScale(16),
     },
     waterIconContainer: {
@@ -261,7 +260,7 @@ const styles = StyleSheet.create({
         borderRadius: horizontalScale(4),
         overflow: 'hidden',
         marginBottom: verticalScale(4),
-        transform:[{scaleX:-1}]
+        transform: [{ scaleX: -1 }]
     },
     waterProgressFill: {
         height: '100%',
@@ -326,7 +325,7 @@ const styles = StyleSheet.create({
     planInfo: {
         flex: 1,
         alignItems: 'flex-end',
-        marginHorizontal:horizontalScale(15)
+        marginHorizontal: horizontalScale(15)
     },
     planTitle: {
         fontSize: ScaleFontSize(16),
@@ -357,7 +356,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255, 255, 255, 0.3)',
         borderRadius: horizontalScale(3),
         overflow: 'hidden',
-        transform:[{scaleX:-1}]
+        transform: [{ scaleX: -1 }]
     },
     planProgressFill: {
         height: '100%',

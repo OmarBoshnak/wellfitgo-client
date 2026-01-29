@@ -4,6 +4,7 @@
  */
 
 import { useCallback, useMemo } from 'react';
+import { useRouter } from 'expo-router';
 import { useAppDispatch, useAppSelector } from '@/src/shared/store';
 import {
     selectSubscription,
@@ -11,8 +12,8 @@ import {
     selectSubscriptionDaysRemaining,
     setSubscription,
 } from '@/src/shared/store/slices/profileSlice';
-import { Subscription, SubscriptionStatus } from '@/src/shared/types/profile';
-import { getDaysRemaining, formatDate, getSubscriptionStatusLabel } from '@/src/shared/utils/profileData';
+import { Subscription } from '@/src/shared/types/profile';
+import { formatDate, getSubscriptionStatusLabel } from '@/src/shared/utils/profileData';
 import { isRTL } from '@/src/shared/core/constants/translation';
 
 /**
@@ -20,6 +21,7 @@ import { isRTL } from '@/src/shared/core/constants/translation';
  */
 export function useSubscription() {
     const dispatch = useAppDispatch();
+    const router = useRouter();
 
     // Selectors
     const subscription = useAppSelector(selectSubscription);
@@ -73,20 +75,11 @@ export function useSubscription() {
     }, [isTrial, subscription]);
 
     /**
-     * Handle upgrade action (placeholder)
-     */
-    const handleUpgrade = useCallback(() => {
-        // Navigate to subscription screen
-        console.log('Navigate to upgrade screen');
-    }, []);
-
-    /**
      * Handle manage subscription (placeholder)
      */
     const handleManage = useCallback(() => {
-        // Navigate to subscription management
-        console.log('Navigate to manage subscription');
-    }, []);
+        router.push('/(app)/payment/manage-subscription');
+    }, [router]);
 
     /**
      * Handle cancel subscription (placeholder)
@@ -126,7 +119,6 @@ export function useSubscription() {
         planDisplayName,
         nextBillingFormatted,
         // Actions
-        handleUpgrade,
         handleManage,
         handleCancel,
     };

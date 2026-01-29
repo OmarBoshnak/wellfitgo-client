@@ -45,23 +45,57 @@ const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = memo(({
     const [progress, setProgress] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
     const progressWidth = useSharedValue(0);
+    const isActiveRef = React.useRef(false);
 
-    // Generate waveform bars (mock data for now)
-    const waveformBars = generateWaveformBars([], 25);
+    // Generate waveform bars
+    // Use message.meteringValues if available, otherwise generate a "visual" fallback pattern
+    const waveformBars = React.useMemo(() => {
+        if (message.meteringValues && message.meteringValues.length > 0) {
+            return generateWaveformBars(message.meteringValues, 25);
+        }
+        // Fallback: generate a random-looking but consistent pattern based on message ID
+        const seed = message.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        const fallbackValues = Array.from({ length: 25 }, (_, i) => {
+            // Sine wave + noise
+            return 0.3 + (Math.sin(i * 0.5 + seed) * 0.2) + (Math.random() * 0.2);
+        });
+        return fallbackValues;
+    }, [message.meteringValues, message.id]);
 
     /**
      * Handle play/pause
      */
     const handlePlayPause = useCallback(async () => {
-        if (!message.mediaUrl) return;
+        console.log('[VoiceMessageBubble] Play/pause pressed, mediaUrl:', message.mediaUrl);
+
+        if (!message.mediaUrl) {
+            console.error('[VoiceMessageBubble] No mediaUrl available');
+            return;
+        }
 
         if (isPlaying) {
+            console.log('[VoiceMessageBubble] Pausing playback');
             await audioPlayer.pause();
             setIsPlaying(false);
         } else {
+            console.log('[VoiceMessageBubble] Starting playback from MongoDB URL:', message.mediaUrl);
             setIsLoading(true);
+            isActiveRef.current = true;
             try {
                 await audioPlayer.loadAndPlay(message.mediaUrl, (status) => {
+                    // Check if we are still the active player
+                    if (!isActiveRef.current && status.isPlaying) {
+                        // We were active, but now we are receiving updates. 
+                        // If we are playing, it means we are still the player.
+                        // But if currentUri doesn't match, we should stop.
+                        if (audioPlayer.currentUri !== message.mediaUrl) {
+                            setIsPlaying(false);
+                            isActiveRef.current = false;
+                            return;
+                        }
+                    }
+
+                    // console.log('[VoiceMessageBubble] Status update received:', status);
                     setProgress(status.progress);
                     progressWidth.value = status.progress * 100;
                     setIsPlaying(status.isPlaying);
@@ -70,11 +104,23 @@ const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = memo(({
                         setIsPlaying(false);
                         setProgress(0);
                         progressWidth.value = 0;
+                        if (status.progress >= 1) {
+                            isActiveRef.current = false;
+                        }
                     }
                 });
                 setIsPlaying(true);
             } catch (error) {
-                console.error('Failed to play audio:', error);
+                console.error('[VoiceMessageBubble] Failed to play audio from MongoDB:', error);
+
+                // Reset state
+                setIsPlaying(false);
+                setProgress(0);
+                progressWidth.value = 0;
+                isActiveRef.current = false;
+
+                // Show user feedback about MongoDB audio issue
+                // Could show a toast or inline error message
             } finally {
                 setIsLoading(false);
             }
@@ -84,7 +130,10 @@ const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = memo(({
     // Cleanup on unmount
     useEffect(() => {
         return () => {
-            audioPlayer.unload();
+            // Only unload if we are the one playing
+            if (isActiveRef.current) {
+                audioPlayer.unload();
+            }
         };
     }, []);
 

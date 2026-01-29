@@ -21,6 +21,8 @@ export interface Profile {
     startWeight: number; // in kg
     currentWeight: number; // in kg
     targetWeight: number; // in kg
+    weightHistory?: WeightEntry[];
+    subscriptionStatus?: 'active' | 'paused' | 'cancelled' | 'trial' | 'none';
     dateOfBirth?: string; // ISO date string
     createdAt: number; // timestamp
     updatedAt?: number; // timestamp
@@ -192,7 +194,6 @@ export interface PlanSummaryProps {
 export interface SubscriptionCardProps {
     subscription: Subscription | null;
     onManage: () => void;
-    onUpgrade: () => void;
     isRTL?: boolean;
 }
 

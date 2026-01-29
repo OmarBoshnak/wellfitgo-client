@@ -158,8 +158,9 @@ export interface MealsHeaderProps {
 
 export interface DietPlanCardProps {
     plan: MealPlan;
-    onChangeRequest?: () => void;
     isLoading?: boolean;
+    mealCount?: number;
+    completionProgress?: number;
 }
 
 export interface MealCalendarProps {

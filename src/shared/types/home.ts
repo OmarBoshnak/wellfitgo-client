@@ -39,6 +39,23 @@ export interface WeightProgress {
 
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
+export interface MealIngredient {
+    name: string;
+    quantity?: number;
+    unit?: string;
+    calories?: number;
+    protein?: number;
+    carbs?: number;
+    fat?: number;
+    grams?: number;
+    macrosPer100g?: {
+        calories?: number;
+        protein?: number;
+        carbs?: number;
+        fat?: number;
+    };
+}
+
 export interface MealItem {
     id: string;
     name: string;
@@ -51,6 +68,7 @@ export interface MealItem {
     time: string; // HH:mm format
     isCompleted: boolean;
     imageUrl?: string;
+    items?: MealIngredient[];
 }
 
 export interface DailyNutrition {
@@ -72,6 +90,7 @@ export interface WaterIntake {
     current: number; // in ml
     target: number; // in ml
     glassSize: number; // in ml
+    lastResetAt?: string;
 }
 
 export interface PlanProgress {

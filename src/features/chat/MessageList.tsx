@@ -3,7 +3,7 @@
  * @description Scrollable message list with virtualization
  */
 
-import React, { memo, useCallback, useRef, useState } from 'react';
+import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
 import {
     View,
     FlatList,
@@ -65,6 +65,8 @@ const MessageList: React.FC<MessageListProps> = memo(({
     const [showScrollToBottom, setShowScrollToBottom] = useState(false);
     const isRTL = I18nManager.isRTL;
 
+    // Use messages as-is to show newest at bottom without inverted FlatList
+
     /**
      * Render individual message
      */
@@ -77,7 +79,7 @@ const MessageList: React.FC<MessageListProps> = memo(({
                 onLongPress={onMessageLongPress}
                 isRTL={isRTL}
                 onImagePress={onImagePress}
-                index={messages.length - 1 - index}
+                index={index}
             />
         );
     }, [onMessageLongPress, onImagePress, isRTL, messages.length]);
@@ -136,10 +138,11 @@ const MessageList: React.FC<MessageListProps> = memo(({
     );
 
     /**
-     * Render footer (loading more / typing)
+     * Render footer (typing indicator at bottom)
      */
     const renderFooter = () => (
         <View style={styles.footer}>
+            {isTyping && renderTypingIndicator()}
             {isLoadingMore && (
                 <ActivityIndicator size="small" color={colors.primaryDark} />
             )}
@@ -147,37 +150,34 @@ const MessageList: React.FC<MessageListProps> = memo(({
     );
 
     /**
-     * Render header (typing indicator at bottom since list is inverted)
+     * Render header (empty)
      */
-    const renderHeader = () => (
-        <>
-            {isTyping && renderTypingIndicator()}
-        </>
-    );
+    const renderHeader = () => null;
 
     /**
-     * Handle scroll
+     * Handle scroll to top for loading older messages
      */
     const handleScroll = useCallback((event: any) => {
-        const offsetY = event.nativeEvent.contentOffset.y;
-        setShowScrollToBottom(offsetY > 300);
+        const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+        const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+        setShowScrollToBottom(distanceFromBottom > 300);
     }, []);
+
+    /**
+     * Handle reaching top for loading older messages
+     */
+    const handleBeginReached = useCallback(() => {
+        if (hasMoreMessages && !isLoadingMore && onLoadMore) {
+            onLoadMore();
+        }
+    }, [hasMoreMessages, isLoadingMore, onLoadMore]);
 
     /**
      * Scroll to bottom
      */
     const scrollToBottom = useCallback(() => {
-        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+        flatListRef.current?.scrollToEnd({ animated: true });
     }, []);
-
-    /**
-     * Handle end reached
-     */
-    const handleEndReached = useCallback(() => {
-        if (hasMoreMessages && !isLoadingMore && onLoadMore) {
-            onLoadMore();
-        }
-    }, [hasMoreMessages, isLoadingMore, onLoadMore]);
 
     if (isLoading && messages.length === 0) {
         return (
@@ -195,19 +195,18 @@ const MessageList: React.FC<MessageListProps> = memo(({
                 renderItem={renderMessage}
                 keyExtractor={keyExtractor}
                 getItemLayout={getItemLayout}
-                inverted
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
                 onScroll={handleScroll}
                 scrollEventThrottle={16}
-                onEndReached={handleEndReached}
-                onEndReachedThreshold={0.3}
+                onBeginReached={handleBeginReached}
+                onBeginReachedThreshold={0.1}
                 ListEmptyComponent={renderEmptyState}
                 ListFooterComponent={renderFooter}
                 ListHeaderComponent={renderHeader}
                 removeClippedSubviews={true}
-                windowSize={15}
-                maxToRenderPerBatch={10}
+                windowSize={10}
+                maxToRenderPerBatch={5}
                 updateCellsBatchingPeriod={50}
                 refreshControl={
                     onRefresh ? (

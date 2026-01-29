@@ -43,6 +43,7 @@ export interface VoiceRecorderProps {
     onCancel: () => void;
     onPause: () => void;
     onResume: () => void;
+    isUploading?: boolean;
 }
 
 // ============================================================================
@@ -59,6 +60,7 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = memo(({
     onCancel,
     onPause,
     onResume,
+    isUploading = false,
 }) => {
     const isRTL = I18nManager.isRTL;
     const recordingPulse = useSharedValue(1);
@@ -166,22 +168,31 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = memo(({
 
                 {/* Send Button */}
                 <TouchableOpacity
-                    style={styles.sendButton}
+                    style={[
+                        styles.sendButton,
+                        isUploading && styles.sendButtonUploading
+                    ]}
                     onPress={() => {
                         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                         onSend();
                     }}
-                    disabled={duration < 0.5}
+                    disabled={duration < 0.5 || isUploading}
                     accessibilityLabel="إرسال الرسالة الصوتية"
                     accessibilityRole="button"
                 >
-                    <Ionicons name="send" size={20} color={colors.white} />
+                    {isUploading ? (
+                        <Ionicons name="hourglass" size={20} color={colors.white} />
+                    ) : (
+                        <Ionicons name="send" size={20} color={colors.white} />
+                    )}
                 </TouchableOpacity>
             </View>
 
             {/* Instructions */}
             <Text style={styles.instructions}>
-                {isPaused
+                {isUploading
+                    ? 'جاري رفع التسجيل...'
+                    : isPaused
                     ? 'التسجيل متوقف مؤقتاً'
                     : 'جاري التسجيل... اضغط على الإرسال عند الانتهاء'}
             </Text>
@@ -251,8 +262,9 @@ const styles = StyleSheet.create({
         height: verticalScale(30),
     },
     waveformBar: {
-        width: 3,
+        width: 1,
         borderRadius: 1.5,
+
     },
     duration: {
         fontSize: ScaleFontSize(13),
@@ -277,6 +289,9 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         ...shadows.medium,
+    },
+    sendButtonUploading: {
+        backgroundColor: colors.textSecondary,
     },
     instructions: {
         fontSize: ScaleFontSize(11),

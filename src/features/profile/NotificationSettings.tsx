@@ -68,7 +68,7 @@ function ToggleRow({
                 }}
                 thumbColor={value ? colors.primaryDark : colors.gray}
                 ios_backgroundColor={colors.secondary}
-                style={Platform.OS === 'ios' ? { transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] } : undefined}
+                style={{ transform: [{ scaleX: -1 }] }}
             />
         </View>
     );

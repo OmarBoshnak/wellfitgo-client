@@ -127,7 +127,9 @@ export const calculateWeightProgress = (profile: Profile): WeightProgress => {
     }
 
     // Determine trend from history
-    const history = mockWeightHistory;
+    const history = Array.isArray(profile.weightHistory)
+        ? [...profile.weightHistory].sort((a, b) => a.timestamp - b.timestamp)
+        : [];
     let trend: 'up' | 'down' | 'stable' = 'stable';
     if (history.length >= 2) {
         const last = history[history.length - 1].weight;

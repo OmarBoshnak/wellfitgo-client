@@ -3,7 +3,7 @@
  * @description Redux slice for chat state management with optimistic updates
  */
 
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction, createSelector } from '@reduxjs/toolkit';
 import type { RootState } from '../index';
 import type {
     ChatState,
@@ -13,17 +13,16 @@ import type {
     ConnectionStatus,
     TypingIndicator,
 } from '@/src/shared/types/chat';
-import { mockMessages, mockConversation, mockDoctor } from '@/src/shared/utils/chat/mockData';
 
 // ============================================================================
 // Initial State
 // ============================================================================
 
 const initialState: ChatState = {
-    messages: mockMessages,
-    conversations: [mockConversation],
-    activeConversationId: 'conv_1',
-    currentDoctor: mockDoctor,
+    messages: [],
+    conversations: [],
+    activeConversationId: null,
+    currentDoctor: null,
     // UI States
     isLoading: false,
     isSending: false,
@@ -328,20 +327,24 @@ export const selectMessages = (state: RootState) => state.chat.messages;
 export const selectActiveConversationId = (state: RootState) =>
     state.chat.activeConversationId;
 
-export const selectActiveConversationMessages = (state: RootState) => {
-    const { messages, activeConversationId } = state.chat;
-    if (!activeConversationId) return [];
-    return messages
-        .filter(m => m.conversationId === activeConversationId)
-        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-};
+export const selectActiveConversationMessages = createSelector(
+    [(state: RootState) => state.chat.messages, (state: RootState) => state.chat.activeConversationId],
+    (messages, activeConversationId) => {
+        if (!activeConversationId) return [];
+        return messages
+            .filter(m => m.conversationId === activeConversationId)
+            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    }
+);
 
 export const selectConversations = (state: RootState) => state.chat.conversations;
 
-export const selectActiveConversation = (state: RootState) => {
-    const { conversations, activeConversationId } = state.chat;
-    return conversations.find(c => c.id === activeConversationId) || null;
-};
+export const selectActiveConversation = createSelector(
+    [(state: RootState) => state.chat.conversations, (state: RootState) => state.chat.activeConversationId],
+    (conversations, activeConversationId) => {
+        return conversations.find(c => c.id === activeConversationId) || null;
+    }
+);
 
 export const selectCurrentDoctor = (state: RootState) => state.chat.currentDoctor;
 

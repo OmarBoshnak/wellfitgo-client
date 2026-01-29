@@ -20,25 +20,17 @@ interface SubscriptionCardProps {
     subscription: Subscription | null;
     /** Manage subscription handler */
     onManage: () => void;
-    /** Upgrade handler */
-    onUpgrade: () => void;
 }
 
 function SubscriptionCard({
     subscription,
     onManage,
-    onUpgrade,
 }: SubscriptionCardProps) {
     const t = profileTranslations;
 
     const handleManage = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onManage();
-    };
-
-    const handleUpgrade = () => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        onUpgrade();
     };
 
     if (!subscription) {
@@ -57,13 +49,6 @@ function SubscriptionCard({
                     </View>
                     <Text style={styles.emptyTitle}>{t.subscription}</Text>
                     <Text style={styles.emptyText}>لا يوجد اشتراك حالي</Text>
-                    <Pressable
-                        onPress={handleUpgrade}
-                        style={styles.upgradeButton}
-                        accessibilityRole="button"
-                    >
-                        <Text style={styles.upgradeButtonText}>{t.upgradePlan}</Text>
-                    </Pressable>
                 </View>
             </Animated.View>
         );
@@ -157,23 +142,6 @@ function SubscriptionCard({
                 </View>
             )}
 
-            {/* Actions */}
-            {!subscription.cancelAtPeriodEnd && (
-                <View style={styles.actions}>
-                    <Pressable
-                        onPress={handleUpgrade}
-                        style={styles.actionButton}
-                        accessibilityRole="button"
-                    >
-                        <Ionicons
-                            name="arrow-up-circle"
-                            size={horizontalScale(18)}
-                            color={colors.primaryDark}
-                        />
-                        <Text style={styles.actionText}>{t.upgradePlan}</Text>
-                    </Pressable>
-                </View>
-            )}
         </Animated.View>
     );
 }
@@ -305,23 +273,6 @@ const styles = StyleSheet.create({
         flex: 1,
         writingDirection: isRTL ? 'rtl' : 'ltr',
     },
-    actions: {
-        paddingTop: verticalScale(12),
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-    },
-    actionButton: {
-        flexDirection: isRTL ? 'row-reverse' : 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: horizontalScale(8),
-        paddingVertical: verticalScale(10),
-    },
-    actionText: {
-        fontSize: ScaleFontSize(14),
-        fontWeight: '600',
-        color: colors.primaryDark,
-    },
     emptyState: {
         alignItems: 'center',
         paddingVertical: verticalScale(16),
@@ -345,17 +296,6 @@ const styles = StyleSheet.create({
         fontSize: ScaleFontSize(13),
         color: colors.textSecondary,
         marginBottom: verticalScale(16),
-    },
-    upgradeButton: {
-        backgroundColor: colors.primaryDark,
-        paddingHorizontal: horizontalScale(24),
-        paddingVertical: verticalScale(12),
-        borderRadius: horizontalScale(10),
-    },
-    upgradeButtonText: {
-        fontSize: ScaleFontSize(14),
-        fontWeight: '600',
-        color: colors.white,
     },
 });
 
