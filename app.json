@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "WellFitGo",
-    "slug": "WellFitGo",
+    "slug": "wellfitgo-2gnw2c",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -15,8 +15,10 @@
       "bundleIdentifier": "com.wellfitgoapp",
       "infoPlist": {
         "UIBackgroundModes": [
+          "audio",
           "audio"
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -37,7 +39,21 @@
             "BROWSABLE",
             "DEFAULT"
           ]
+        },
+        {
+          "action": "VIEW",
+          "data": {
+            "scheme": "appwrite-callback-69676fd2001b570962bd"
+          },
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
+      ],
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "web": {
@@ -78,6 +94,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f65767b3-9a65-4ac2-bb7a-671439e2a362"
+      }
+    },
+    "owner": "omarboshnaks-organization"
   }
 }
