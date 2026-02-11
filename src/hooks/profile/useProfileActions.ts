@@ -149,6 +149,9 @@ export function useProfileActions() {
                                     console.warn('No valid Appwrite session found, clearing local state only');
                                 }
 
+                                // Clear all local auth data
+                                await AuthService.logout();
+
                                 // Clear all state
                                 dispatch(clearProfile());
                                 dispatch(resetAuth()); // Clear auth state completely
