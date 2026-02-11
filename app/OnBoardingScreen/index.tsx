@@ -7,6 +7,7 @@ import {
     Text,
     Image,
     TouchableOpacity,
+    Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -21,6 +22,7 @@ import {
 import { useAppDispatch } from '@/src/shared/store';
 import { completeOnboarding } from '@/src/shared/store/slices/authSlice';
 import * as asyncStorage from '@/src/shared/services/storage/asyncStorage';
+import { iso } from 'zod';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export default function OnBoardingScreen() {
@@ -77,7 +79,7 @@ export default function OnBoardingScreen() {
             <StatusBar barStyle="dark-content" backgroundColor={colors.bgPrimary} />
 
             {/* Skip button - Top of screen */}
-            <View style={styles.skipContainer}>
+            <View style={[styles.skipContainer,{top: Platform.OS === 'ios' ? verticalScale(45) : verticalScale(30)}]}>
                 <TouchableOpacity
                     style={styles.skipButtonTop}
                     onPress={handleSkip}
@@ -162,7 +164,6 @@ const styles = StyleSheet.create({
     },
     skipContainer: {
         position: 'absolute',
-        top: verticalScale(60),
         right: horizontalScale(30),
         zIndex: 1,
     },

@@ -5,7 +5,6 @@
 
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import {
-    HomeState,
     WeightData,
     MealItem,
     WaterIntake,
@@ -18,6 +17,17 @@ import {
 // Initial State
 // ============================================================================
 
+interface HomeState {
+    weightData: WeightData | null;
+    meals: MealItem[];
+    waterIntake: WaterIntake;
+    planProgress: PlanProgress;
+    isLoading: boolean;
+    error: string | null;
+    lastRefresh: number | null;
+    inProgressMeals: Record<string, boolean>; // mealId -> inProgress status
+}
+
 const initialState: HomeState = {
     weightData: null,
     meals: [],
@@ -26,6 +36,7 @@ const initialState: HomeState = {
     isLoading: false,
     error: null,
     lastRefresh: null,
+    inProgressMeals: {},
 };
 
 // ============================================================================
@@ -130,6 +141,14 @@ const homeSlice = createSlice({
         },
 
         /**
+         * Set meal completion progress
+         */
+        setMealInProgress: (state, action: PayloadAction<{ mealId: string; inProgress: boolean }>) => {
+            const { mealId, inProgress } = action.payload;
+            state.inProgressMeals[mealId] = inProgress;
+        },
+
+        /**
          * Reset home state
          */
         resetHome: () => initialState,
@@ -147,6 +166,8 @@ export const selectPlanProgress = (state: { home: HomeState }) => state.home.pla
 export const selectHomeLoading = (state: { home: HomeState }) => state.home.isLoading;
 export const selectHomeError = (state: { home: HomeState }) => state.home.error;
 export const selectLastRefresh = (state: { home: HomeState }) => state.home.lastRefresh;
+export const selectInProgressMeals = (state: { home: HomeState }) => state.home.inProgressMeals;
+export const selectIsMealInProgress = (mealId: string) => (state: { home: HomeState }) => state.home.inProgressMeals[mealId] || false;
 
 // Computed selectors
 export const selectCompletedMeals = (state: { home: HomeState }) =>
@@ -175,6 +196,7 @@ export const {
     setWeightData,
     setMeals,
     toggleMealCompletion,
+    setMealInProgress,
     setWaterIntake,
     addWater,
     removeWater,

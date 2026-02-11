@@ -15,3 +15,4 @@ export { default as MealOptionsSheet } from './MealOptionsSheet';
 export { default as ChangeRequestModal } from './ChangeRequestModal';
 export { default as MealsLoadingSkeleton } from './MealsLoadingSkeleton';
 export { default as MealsErrorBoundary } from './MealsErrorBoundary';
+export { default as NoPlanEmptyState } from './NoPlanEmptyState';

@@ -17,13 +17,15 @@ import Animated, {
 
 import { colors, gradients, shadows } from '@/src/shared/core/constants/Theme';
 import { horizontalScale, verticalScale, ScaleFontSize } from '@/src/shared/core/utils/scaling';
-import { WaterIntake, PlanProgress } from '@/src/shared/types/home';
+import { WaterIntake, PlanProgress, DailyProgress } from '@/src/shared/types/home';
 
 interface QuickActionsProps {
     /** Water intake data */
     waterIntake: WaterIntake;
     /** Plan progress data */
     planProgress: PlanProgress;
+    /** Daily progress data (meals + water completion) */
+    dailyProgress?: DailyProgress | null;
     /** Add water handler */
     onAddWater: () => void;
     /** Remove water handler */
@@ -38,6 +40,7 @@ interface QuickActionsProps {
 function QuickActions({
     waterIntake,
     planProgress,
+    dailyProgress,
     onAddWater,
     onRemoveWater,
     onViewPlan,
@@ -196,11 +199,32 @@ function QuickActions({
                                 </Text>
                             </View>
                             <View style={styles.planProgressCircle}>
-                                <Text style={styles.planProgressText}>{planProgressPercent}%</Text>
+                                <Text style={styles.planProgressText}>
+                                    {dailyProgress?.overallProgress ?? planProgressPercent}%
+                                </Text>
                             </View>
                         </View>
+
+                        {/* Daily Progress Stats */}
+                        {dailyProgress && (
+                            <View style={styles.dailyStatsRow}>
+                                <View style={styles.dailyStat}>
+                                    <Ionicons name="restaurant" size={horizontalScale(14)} color="rgba(255,255,255,0.9)" />
+                                    <Text style={styles.dailyStatText}>
+                                        {dailyProgress.completedMeals}/{dailyProgress.totalMeals} وجبات
+                                    </Text>
+                                </View>
+                                <View style={styles.dailyStat}>
+                                    <Ionicons name="water" size={horizontalScale(14)} color="rgba(255,255,255,0.9)" />
+                                    <Text style={styles.dailyStatText}>
+                                        {dailyProgress.waterIntake?.percentage ?? 0}% ماء
+                                    </Text>
+                                </View>
+                            </View>
+                        )}
+
                         <View style={styles.planProgressBar}>
-                            <View style={[styles.planProgressFill, { width: `${planProgressPercent}%` }]} />
+                            <View style={[styles.planProgressFill, { width: `${dailyProgress?.overallProgress ?? planProgressPercent}%` }]} />
                         </View>
                     </LinearGradient>
                 </Animated.View>
@@ -362,6 +386,23 @@ const styles = StyleSheet.create({
         height: '100%',
         backgroundColor: colors.white,
         borderRadius: horizontalScale(3),
+    },
+    dailyStatsRow: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        marginTop: verticalScale(8),
+        marginBottom: verticalScale(4),
+        gap: horizontalScale(16),
+    },
+    dailyStat: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: horizontalScale(4),
+    },
+    dailyStatText: {
+        fontSize: ScaleFontSize(12),
+        color: 'rgba(255, 255, 255, 0.9)',
+        fontWeight: '600',
     },
 });
 

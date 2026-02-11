@@ -69,6 +69,7 @@ export interface MealItem {
     isCompleted: boolean;
     imageUrl?: string;
     items?: MealIngredient[];
+    emoji?: string; // Meal emoji for display
 }
 
 export interface DailyNutrition {
@@ -108,6 +109,22 @@ export interface QuickAction {
     value: number;
     target: number;
 }
+
+export interface DailyProgress {
+    date: string;
+    totalMeals: number;
+    completedMeals: number;
+    mealCompletionPercentage: number;
+    waterIntake: {
+        current: number;
+        target: number;
+        percentage: number;
+    };
+    overallProgress: number;
+    achievements: string[];
+    remainingTasks: string[];
+}
+
 
 // ============================================================================
 // Home State Types
@@ -159,10 +176,10 @@ export interface WeightProgressCardProps {
 
 export interface MealsCardProps {
     meals: MealItem[];
-    nutrition: DailyNutrition;
-    onMealToggle: (mealId: string) => void;
-    onViewAll: () => void;
+    onNavigate: (screen: string) => void;
     isLoading?: boolean;
+    error?: string | null;
+    onRetry?: () => void;
 }
 
 export interface QuickActionsProps {

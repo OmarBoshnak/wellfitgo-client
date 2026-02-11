@@ -1,6 +1,7 @@
 import { Client, Account, ID, OAuthProvider } from 'react-native-appwrite';
 import { makeRedirectUri } from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Initialize Appwrite Client
 const client = new Client()
@@ -243,40 +244,63 @@ export class AppwriteAuth {
 
     /**
      * Delete current user account
-     * Calls backend API for full Appwrite account deletion, then clears local sessions
+     * Calls backend API for full Appwrite + MongoDB account deletion, then clears local sessions
      */
     static async deleteAccount() {
         try {
-            // Get current user info before deletion
-            const user = await account.get();
-
-            // Try to call backend API for full account deletion
+            // Try to get Appwrite userId; fall back to stored user data if session is expired
+            let appwriteUserId: string | null = null;
             try {
-                const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://your-backend.herokuapp.com';
-                const response = await fetch(`${backendUrl}/api/auth/account`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ appwriteUserId: user.$id }),
-                });
-
-                const result = await response.json();
-                if (!result.success) {
-                    console.warn('Backend account deletion returned error:', result.message);
+                const user = await account.get();
+                appwriteUserId = user.$id;
+            } catch {
+                // Session may be expired — fall back to stored user
+                const storedUser = await AsyncStorage.getItem('user');
+                if (storedUser) {
+                    const parsed = JSON.parse(storedUser);
+                    appwriteUserId = parsed.appwriteId || null;
                 }
-            } catch (backendError) {
-                console.warn('Backend account deletion failed, continuing with session cleanup:', backendError);
+                console.warn('Appwrite session expired, using stored user for deletion');
             }
 
-            // Always clear local sessions
-            await account.deleteSessions();
+            // Call backend API for full account deletion (Appwrite + MongoDB cascade)
+            const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://your-backend.herokuapp.com';
+            const token = await AsyncStorage.getItem('token');
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+
+            if (token) {
+                headers.Authorization = `Bearer ${token}`;
+            }
+
+            const response = await fetch(`${backendUrl}/api/auth/account`, {
+                method: 'DELETE',
+                headers,
+                body: JSON.stringify({ appwriteUserId }),
+            });
+
+            const result = await response.json();
+            if (!result.success) {
+                console.warn('Backend account deletion returned error:', result.message);
+            }
+
+            // Best-effort: clear Appwrite sessions
+            try {
+                await account.deleteSessions();
+            } catch {
+                // Session already gone — that's fine
+            }
+
+            // Clear local stored data
+            await AsyncStorage.removeItem('token');
+            await AsyncStorage.removeItem('user');
 
             return {
                 success: true,
                 data: {
                     deleted: true,
-                    userId: user.$id
+                    userId: appwriteUserId,
                 }
             };
         } catch (error: any) {

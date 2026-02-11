@@ -43,6 +43,7 @@ export interface Message {
     // Optimistic UI
     isOptimistic?: boolean;
     tempId?: string; // For matching optimistic updates
+    clientTempId?: string; // Backend reconciliation ID
     // Reply feature
     replyToId?: string;
     replyToContent?: string;
@@ -96,6 +97,11 @@ export interface Doctor {
     specialization?: string;
     isOnline: boolean;
     lastSeen?: string;
+    isSocketOnline?: boolean;
+    isScheduleAvailable?: boolean;
+    availabilityTimezone?: string;
+    availabilityDayKey?: string | null;
+    availabilityMinutes?: number | null;
 }
 
 // ============================================================================
@@ -135,6 +141,8 @@ export interface ChatState {
     // Pagination
     hasMoreMessages: boolean;
     isLoadingMore: boolean;
+    // Unread
+    unreadCount: number;
 }
 
 // ============================================================================

@@ -33,6 +33,8 @@ const initialState: ChatState = {
     // Pagination
     hasMoreMessages: true,
     isLoadingMore: false,
+    // Unread
+    unreadCount: 0,
 };
 
 // ============================================================================
@@ -234,15 +236,52 @@ const chatSlice = createSlice({
             state.currentDoctor = action.payload;
         },
 
-        updateDoctorOnlineStatus: (
+        updateDoctorSocketStatus: (
             state,
-            action: PayloadAction<{ isOnline: boolean; lastSeen?: string }>
+            action: PayloadAction<{ doctorId: string; isOnline: boolean; lastSeen?: string }>
         ) => {
-            if (state.currentDoctor) {
+            if (!state.currentDoctor || state.currentDoctor.id !== action.payload.doctorId) {
+                return;
+            }
+
+            state.currentDoctor.isSocketOnline = action.payload.isOnline;
+            if (action.payload.lastSeen) {
+                state.currentDoctor.lastSeen = action.payload.lastSeen;
+            }
+
+            if (typeof state.currentDoctor.isScheduleAvailable === 'boolean') {
+                state.currentDoctor.isOnline =
+                    state.currentDoctor.isSocketOnline === true
+                    && state.currentDoctor.isScheduleAvailable === true;
+            } else {
                 state.currentDoctor.isOnline = action.payload.isOnline;
-                if (action.payload.lastSeen) {
-                    state.currentDoctor.lastSeen = action.payload.lastSeen;
-                }
+            }
+        },
+        setDoctorAvailabilityStatus: (
+            state,
+            action: PayloadAction<{
+                doctorId: string;
+                isOnline: boolean;
+                isSocketOnline: boolean;
+                isScheduleAvailable: boolean;
+                timezone?: string;
+                dayKey?: string | null;
+                minutes?: number | null;
+                lastSeen?: string | null;
+            }>
+        ) => {
+            if (!state.currentDoctor || state.currentDoctor.id !== action.payload.doctorId) {
+                return;
+            }
+
+            state.currentDoctor.isOnline = action.payload.isOnline;
+            state.currentDoctor.isSocketOnline = action.payload.isSocketOnline;
+            state.currentDoctor.isScheduleAvailable = action.payload.isScheduleAvailable;
+            state.currentDoctor.availabilityTimezone = action.payload.timezone;
+            state.currentDoctor.availabilityDayKey = action.payload.dayKey;
+            state.currentDoctor.availabilityMinutes = action.payload.minutes;
+            if (action.payload.lastSeen) {
+                state.currentDoctor.lastSeen = action.payload.lastSeen;
             }
         },
 
@@ -279,6 +318,19 @@ const chatSlice = createSlice({
         },
 
         // ====================================================================
+        // Unread Count
+        // ====================================================================
+        incrementUnreadCount: (state) => {
+            state.unreadCount += 1;
+        },
+        resetUnreadCount: (state) => {
+            state.unreadCount = 0;
+        },
+        setUnreadCount: (state, action: PayloadAction<number>) => {
+            state.unreadCount = action.payload;
+        },
+
+        // ====================================================================
         // Reset
         // ====================================================================
         resetChat: () => initialState,
@@ -311,10 +363,14 @@ export const {
     updateConversation,
     updateUnreadCount,
     setCurrentDoctor,
-    updateDoctorOnlineStatus,
+    updateDoctorSocketStatus,
+    setDoctorAvailabilityStatus,
     setConnectionStatus,
     setTypingIndicator,
     clearTypingIndicators,
+    incrementUnreadCount,
+    resetUnreadCount,
+    setUnreadCount,
     resetChat,
 } = chatSlice.actions;
 
@@ -370,8 +426,7 @@ export const selectHasMoreMessages = (state: RootState) => state.chat.hasMoreMes
 
 export const selectIsLoadingMore = (state: RootState) => state.chat.isLoadingMore;
 
-export const selectUnreadCount = (state: RootState) =>
-    state.chat.conversations.reduce((sum, c) => sum + c.unreadCount, 0);
+export const selectUnreadCount = (state: RootState) => state.chat.unreadCount;
 
 // ============================================================================
 // Export

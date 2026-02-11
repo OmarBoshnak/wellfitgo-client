@@ -11,6 +11,7 @@ import {
     CoachPlan,
     ProfileSettings,
     NotificationSettings,
+    NotificationToggleKey,
     AppPreferences,
     ProfileUpdate,
     DEFAULT_PROFILE_SETTINGS,
@@ -25,6 +26,7 @@ const initialState: ProfileState = {
     subscription: null,
     coachPlan: null,
     settings: { ...DEFAULT_PROFILE_SETTINGS },
+    weightGoalType: 'lose',
     isLoading: false,
     isUpdating: false,
     error: null,
@@ -136,7 +138,7 @@ const profileSlice = createSlice({
          */
         toggleNotification: (
             state,
-            action: PayloadAction<keyof NotificationSettings>
+            action: PayloadAction<NotificationToggleKey>
         ) => {
             const key = action.payload;
             state.settings.notifications[key] = !state.settings.notifications[key];
@@ -207,6 +209,13 @@ const profileSlice = createSlice({
         },
 
         /**
+         * Set weight goal type
+         */
+        setWeightGoalType: (state, action: PayloadAction<'lose' | 'gain' | 'maintain'>) => {
+            state.weightGoalType = action.payload;
+        },
+
+        /**
          * Clear profile on logout
          */
         clearProfile: () => initialState,
@@ -230,6 +239,7 @@ export const selectProfileLoading = (state: { profile: ProfileState }) => state.
 export const selectProfileUpdating = (state: { profile: ProfileState }) => state.profile.isUpdating;
 export const selectProfileError = (state: { profile: ProfileState }) => state.profile.error;
 export const selectLastSync = (state: { profile: ProfileState }) => state.profile.lastSync;
+export const selectWeightGoalType = (state: { profile: ProfileState }) => state.profile.weightGoalType;
 
 // Computed selectors
 export const selectFullName = (state: { profile: ProfileState }) => {
@@ -338,6 +348,7 @@ export const {
     setTheme,
     setProfileData,
     setLastSync,
+    setWeightGoalType,
     clearProfile,
 } = profileSlice.actions;
 

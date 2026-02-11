@@ -23,21 +23,6 @@ function MealOptionsSheet({
     onSelectOption,
     onConfirm,
 }: MealOptionsSheetProps) {
-    // Calculate total calories
-    const totalCalories = useMemo(() => {
-        if (!meal?.categories) return 0;
-
-        let total = 0;
-        meal.categories.forEach(category => {
-            const categorySelections = selections[category.id] || [];
-            category.options.forEach(option => {
-                if (categorySelections.includes(option.id) && option.calories) {
-                    total += option.calories;
-                }
-            });
-        });
-        return total;
-    }, [meal, selections]);
 
     const handleSelectOption = useCallback((categoryId: string, optionId: string) => {
         if (meal) {
@@ -170,10 +155,6 @@ function MealOptionsSheet({
 
                 {/* Footer */}
                 <View style={styles.footer}>
-                    <View style={styles.totalCalories}>
-                        <Text style={styles.totalLabel}>إجمالي السعرات</Text>
-                        <Text style={styles.totalValue}>{totalCalories} سعرة</Text>
-                    </View>
                     <Pressable
                         onPress={onConfirm}
                         accessibilityRole="button"
@@ -320,23 +301,11 @@ const styles = StyleSheet.create({
     footer: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        justifyContent: 'center',
         padding: horizontalScale(16),
         borderTopWidth: 1,
         borderTopColor: colors.bgSecondary,
         paddingBottom: verticalScale(32), // Safe area
-    },
-    totalCalories: {
-        alignItems: 'flex-end',
-    },
-    totalLabel: {
-        fontSize: ScaleFontSize(12),
-        color: colors.textSecondary,
-    },
-    totalValue: {
-        fontSize: ScaleFontSize(18),
-        fontWeight: '700',
-        color: colors.textPrimary,
     },
     confirmButton: {
         backgroundColor: colors.primaryDark,

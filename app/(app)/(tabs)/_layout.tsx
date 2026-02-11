@@ -9,8 +9,17 @@ import { Platform } from 'react-native';
 
 import { colors } from '@/src/shared/core/constants/Theme';
 import { horizontalScale, verticalScale } from '@/src/shared/core/utils/scaling';
+import { useAppSelector } from '@/src/shared/store';
+import { selectUnreadCount } from '@/src/shared/store/slices/chatSlice';
+import { useChatSocket } from '@/src/hooks/chat';
 
 export default function TabsLayout() {
+    // Keep socket alive across all tabs
+    useChatSocket();
+
+    // Unread badge count
+    const unreadCount = useAppSelector(selectUnreadCount);
+
     return (
         <Tabs
             screenOptions={{
@@ -22,8 +31,8 @@ export default function TabsLayout() {
                     borderTopColor: colors.border,
                     borderTopWidth: 1,
                     paddingTop: verticalScale(8),
-                    paddingBottom: Platform.OS === 'ios' ? verticalScale(15) : verticalScale(8),
-                    height: Platform.OS === 'ios' ? verticalScale(70) : verticalScale(65),
+                    paddingBottom: Platform.OS === 'ios' ? verticalScale(15) : verticalScale(20),
+                    height: Platform.OS === 'ios' ? verticalScale(70) : verticalScale(85),
                 },
                 tabBarLabelStyle: {
                     fontSize: 11,
@@ -48,6 +57,16 @@ export default function TabsLayout() {
                     tabBarIcon: ({ color, size }: { color: string; size: number }) => (
                         <Ionicons name="chatbubbles" size={size} color={color} />
                     ),
+                    tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+                    tabBarBadgeStyle: {
+                        backgroundColor: '#EF4444',
+                        color: '#FFFFFF',
+                        fontSize: 11,
+                        fontWeight: '700',
+                        minWidth: 18,
+                        height: 18,
+                        borderRadius: 9,
+                    },
                 }}
             />
 

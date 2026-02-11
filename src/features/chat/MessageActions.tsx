@@ -224,6 +224,7 @@ const styles = StyleSheet.create({
     messagePreview: {
         paddingHorizontal: horizontalScale(20),
         paddingVertical: verticalScale(16),
+        alignItems:'flex-end'
     },
     previewText: {
         fontSize: ScaleFontSize(14),
@@ -247,7 +248,7 @@ const styles = StyleSheet.create({
         paddingTop: verticalScale(8),
     },
     actionButton: {
-        flexDirection: 'row',
+        flexDirection: 'row-reverse',
         alignItems: 'center',
         paddingHorizontal: horizontalScale(20),
         paddingVertical: verticalScale(14),

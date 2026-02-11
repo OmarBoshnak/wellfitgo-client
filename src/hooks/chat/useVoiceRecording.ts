@@ -8,6 +8,16 @@ import { audioRecorder } from '@/src/shared/utils/media';
 import type { RecordingState, VoiceRecordingData } from '@/src/shared/types/chat';
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+/** Maximum recording duration in seconds (2 minutes) */
+const MAX_DURATION = 120;
+
+/** Warning threshold - show warning when approaching limit (last 10 seconds) */
+const WARNING_THRESHOLD = 110;
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -16,6 +26,8 @@ export interface UseVoiceRecordingReturn {
     recordingState: RecordingState;
     duration: number;
     meteringValues: number[];
+    maxDuration: number;
+    isNearingLimit: boolean;
     // Actions
     startRecording: () => Promise<void>;
     pauseRecording: () => Promise<void>;
@@ -38,6 +50,7 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
     const [meteringValues, setMeteringValues] = useState<number[]>([]);
     const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const meteringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const stopRecordingRef = useRef<(() => Promise<{ uri: string; duration: number; meteringValues: number[] } | null>) | null>(null);
 
     /**
      * Start duration timer
@@ -177,6 +190,17 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
         setMeteringValues([]);
     }, [stopDurationTimer, stopMeteringUpdates]);
 
+    // Store stopRecording ref for use in auto-stop effect
+    stopRecordingRef.current = stopRecording;
+
+    // Auto-stop when max duration reached
+    useEffect(() => {
+        if (recordingState === 'recording' && duration >= MAX_DURATION) {
+            console.log('[useVoiceRecording] Max duration reached, auto-stopping');
+            stopRecordingRef.current?.();
+        }
+    }, [duration, recordingState]);
+
     // Cleanup on unmount
     useEffect(() => {
         return () => {
@@ -190,11 +214,14 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
     const isRecording = recordingState === 'recording';
     const isPaused = recordingState === 'paused';
     const canSend = (isRecording || isPaused) && duration >= 0.5; // Minimum 0.5 seconds
+    const isNearingLimit = duration >= WARNING_THRESHOLD && duration < MAX_DURATION;
 
     return {
         recordingState,
         duration,
         meteringValues,
+        maxDuration: MAX_DURATION,
+        isNearingLimit,
         startRecording,
         pauseRecording,
         resumeRecording,

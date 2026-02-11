@@ -10,3 +10,6 @@ export { default as MealsCard } from './MealsCard';
 export { default as QuickActions } from './QuickActions';
 export { default as HomeErrorBoundary } from './HomeErrorBoundary';
 export { default as HomeLoadingSkeleton } from './HomeLoadingSkeleton';
+export { default as ActivePlanDashboard } from './ActivePlanDashboard';
+export { default as ProgressChart } from './ProgressChart';
+export { default as DayScroller, DayStatus } from './DayScroller';

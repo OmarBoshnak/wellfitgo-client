@@ -20,12 +20,15 @@ interface ProfileActionsProps {
     onDeleteAccount: () => void;
     /** Is logging out */
     isLoggingOut?: boolean;
+    /** Is deleting account */
+    isDeletingAccount?: boolean;
 }
 
 function ProfileActions({
     onLogout,
     onDeleteAccount,
     isLoggingOut = false,
+    isDeletingAccount = false,
 }: ProfileActionsProps) {
     const t = profileTranslations;
 
@@ -73,21 +76,27 @@ function ProfileActions({
             {/* Delete account button */}
             <Pressable
                 onPress={handleDeleteAccount}
-                disabled={isLoggingOut}
+                disabled={isLoggingOut || isDeletingAccount}
                 style={({ pressed }) => [
                     styles.deleteButton,
                     pressed && styles.buttonPressed,
-                    isLoggingOut && styles.buttonDisabled,
+                    (isLoggingOut || isDeletingAccount) && styles.buttonDisabled,
                 ]}
                 accessibilityRole="button"
                 accessibilityLabel={t.deleteAccount}
             >
-                <Ionicons
-                    name="trash-outline"
-                    size={horizontalScale(18)}
-                    color={colors.textSecondary}
-                />
-                <Text style={styles.deleteText}>{t.deleteAccount}</Text>
+                {isDeletingAccount ? (
+                    <ActivityIndicator size="small" color={colors.error} />
+                ) : (
+                    <Ionicons
+                        name="trash-outline"
+                        size={horizontalScale(18)}
+                        color={colors.error}
+                    />
+                )}
+                <Text style={[styles.deleteText, { color: colors.error }]}>
+                    {isDeletingAccount ? 'جاري حذف الحساب...' : t.deleteAccount}
+                </Text>
             </Pressable>
 
             {/* App version */}

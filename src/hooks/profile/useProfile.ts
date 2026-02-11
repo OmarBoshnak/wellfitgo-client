@@ -1,20 +1,16 @@
 /**
  * useProfile Hook
- * @description Profile data management with optimistic updates
+ * @description Profile data management – always re-fetches from backend after mutations
  */
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '@/src/shared/store';
 import { selectToken, selectUser } from '@/src/shared/store/selectors/auth.selectors';
 import {
     selectProfile,
     selectProfileLoading,
-    selectProfileUpdating,
     selectProfileError,
     selectCoachPlan,
-    selectBMI,
-    selectFullName,
-    selectInitials,
     setLoading,
     setUpdating,
     setError,
@@ -28,10 +24,8 @@ import {
     ProfileUpdate,
     Subscription,
     SubscriptionStatus,
-    WeightProgress,
 } from '@/src/shared/types/profile';
 import {
-    calculateWeightProgress,
     validateProfileUpdate,
 } from '@/src/shared/utils/profileData';
 import {
@@ -53,12 +47,8 @@ export function useProfile() {
     // Selectors
     const profile = useAppSelector(selectProfile);
     const isLoading = useAppSelector(selectProfileLoading);
-    const isUpdating = useAppSelector(selectProfileUpdating);
     const error = useAppSelector(selectProfileError);
     const coachPlan = useAppSelector(selectCoachPlan);
-    const bmi = useAppSelector(selectBMI);
-    const fullName = useAppSelector(selectFullName);
-    const initials = useAppSelector(selectInitials);
 
     const normalizeProfileResponse = useCallback(
         (response?: ClientProfileResponse | null) => {
@@ -257,12 +247,6 @@ export function useProfile() {
         []
     );
 
-    // Compute weight progress with history
-    const weightProgress = useMemo((): WeightProgress | null => {
-        if (!profile) return null;
-        return calculateWeightProgress(profile);
-    }, [profile]);
-
     /**
      * Fetch profile data from backend API
      */
@@ -316,7 +300,7 @@ export function useProfile() {
     ]);
 
     /**
-     * Update profile with optimistic update and rollback
+     * Update profile – persist to backend (MongoDB) then re-fetch to guarantee sync
      */
     const handleUpdateProfile = useCallback(
         async (updates: ProfileUpdate) => {
@@ -345,18 +329,11 @@ export function useProfile() {
                     ...(startWeight !== undefined ? { startingWeight: startWeight } : {}),
                 };
 
-                const response = await updateClientProfile(payload, token);
-                const mappedProfile = mapProfileResponse(response as ClientProfileResponse);
+                // Persist to backend (MongoDB)
+                await updateClientProfile(payload, token);
 
-                if (mappedProfile) {
-                    dispatch(setProfile(mappedProfile));
-                } else {
-                    const refreshed = await getClientProfile(token);
-                    const refreshedProfile = mapProfileResponse(refreshed);
-                    if (refreshedProfile) {
-                        dispatch(setProfile(refreshedProfile));
-                    }
-                }
+                // Always re-fetch from backend to ensure local state matches DB
+                await fetchProfile();
 
                 dispatch(setUpdating(false));
                 return { success: true };
@@ -371,7 +348,7 @@ export function useProfile() {
                 return { success: false, errors: ['حدث خطأ أثناء تحديث البيانات'] };
             }
         },
-        [dispatch, profile, token, mapProfileResponse]
+        [dispatch, profile, token, fetchProfile]
     );
 
     /**
@@ -402,17 +379,10 @@ export function useProfile() {
         // Data
         profile,
         coachPlan,
-        weightProgress,
-        bmi,
-        fullName,
-        initials,
         // State
         isLoading,
-        isUpdating,
         error,
         // Actions
-        fetchProfile,
-        updateProfile: handleUpdateProfile,
         updateField,
         refresh,
     };

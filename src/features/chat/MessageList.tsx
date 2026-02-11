@@ -71,7 +71,9 @@ const MessageList: React.FC<MessageListProps> = memo(({
      * Render individual message
      */
     const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
-        const isUser = item.senderId !== 'doctor_1'; // TODO: Use actual current user ID
+        // Use senderRole to determine if message is from user (client) or doctor
+        // Default to treating as user message if senderRole is undefined for safety
+        const isUser = item.senderRole !== 'doctor';
         return (
             <MessageBubble
                 message={item}

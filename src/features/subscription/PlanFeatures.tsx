@@ -64,7 +64,7 @@ const FeatureItem = memo(function FeatureItem({
 function PlanFeatures({
     features,
     columns = 2,
-    title = 'ما مميزات الاشتراك مع WellFitGo',
+    title = 'مميزات الاشتراك مع WellFitGo',
 }: PlanFeaturesProps) {
     // Split features into columns if needed
     const renderFeatures = () => {

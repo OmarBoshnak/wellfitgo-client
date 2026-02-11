@@ -3,13 +3,19 @@
  * @description Enhanced plan card with glassmorphism and progress ring
  */
 
-import React, { memo, useMemo } from 'react';
+import React, { memo, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
     FadeInUp,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+    withSequence,
+    withTiming,
 } from 'react-native-reanimated';
+import { Pressable } from 'react-native';
 
 import { colors, gradients, shadows } from '@/src/shared/core/constants/Theme';
 import { horizontalScale, verticalScale, ScaleFontSize } from '@/src/shared/core/utils/scaling';
@@ -38,6 +44,37 @@ function DietPlanCard({
         }
         return Math.max(0, Math.round(mealCount));
     }, [mealCount]);
+
+    // Animation values
+    const scale = useSharedValue(1);
+    const rotation = useSharedValue(0);
+
+    // Success animation when progress reaches 100%
+    useEffect(() => {
+        if (safeProgress === 1) {
+            // Wiggle animation
+            rotation.value = withSequence(
+                withTiming(15, { duration: 100 }),
+                withTiming(-15, { duration: 100 }),
+                withTiming(10, { duration: 100 }),
+                withTiming(-10, { duration: 100 }),
+                withTiming(0, { duration: 100 })
+            );
+            // Pulse animation
+            scale.value = withSequence(
+                withSpring(1.15, { damping: 10 }),
+                withSpring(1, { damping: 10 })
+            );
+        }
+    }, [safeProgress]);
+
+    const animatedContainerStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: scale.value }],
+    }));
+
+    const animatedEmojiStyle = useAnimatedStyle(() => ({
+        transform: [{ rotate: `${rotation.value}deg` }],
+    }));
 
     if (isLoading || !plan) {
         return (
@@ -69,18 +106,26 @@ function DietPlanCard({
 
                 <View style={styles.cardContent}>
                     {/* Left: Progress Ring + Emoji */}
-                    <View style={styles.leftSection}>
-                        <AnimatedProgressRing
-                            progress={safeProgress}
-                            size={horizontalScale(72)}
-                            strokeWidth={4}
-                        >
-                            <Text style={styles.emoji}>{plan.emoji || '🍽️'}</Text>
-                        </AnimatedProgressRing>
-                        <Text style={styles.progressLabel}>
-                            {Math.round(safeProgress * 100)}%
-                        </Text>
-                    </View>
+                    <Pressable
+                        onPressIn={() => { scale.value = withSpring(0.92); }}
+                        onPressOut={() => { scale.value = withSpring(1); }}
+                        style={styles.leftSectionWrapper}
+                    >
+                        <Animated.View style={[styles.leftSection, animatedContainerStyle]}>
+                            <AnimatedProgressRing
+                                progress={safeProgress}
+                                size={horizontalScale(72)}
+                                strokeWidth={4}
+                            >
+                                <Animated.Text style={[styles.emoji, animatedEmojiStyle]}>
+                                    {plan.emoji || '🍽️'}
+                                </Animated.Text>
+                            </AnimatedProgressRing>
+                            <Text style={styles.progressLabel}>
+                                {Math.round(safeProgress * 100)}%
+                            </Text>
+                        </Animated.View>
+                    </Pressable>
 
                     {/* Right: Plan Info */}
                     <View style={styles.planInfo}>
@@ -151,6 +196,11 @@ const styles = StyleSheet.create({
     cardContent: {
         flexDirection: 'row-reverse',
         padding: horizontalScale(16),
+        alignItems: 'center',
+    },
+    leftSectionWrapper: {
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     leftSection: {
         alignItems: 'center',

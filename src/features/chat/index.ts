@@ -27,4 +27,5 @@ export type { VoiceRecorderProps } from './VoiceRecorder';
 export { default as MessageActions } from './MessageActions';
 export type { MessageActionsProps } from './MessageActions';
 
-
+export { default as AttachmentMenu } from './AttachmentMenu';
+export type { AttachmentMenuProps } from './AttachmentMenu';

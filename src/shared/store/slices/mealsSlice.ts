@@ -5,7 +5,6 @@
 
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import {
-    MealsState,
     MealPlan,
     Meal,
     MealCompletion,
@@ -18,6 +17,24 @@ import {
 
 const now = new Date();
 const todayStr = now.toISOString().split('T')[0];
+
+interface MealsState {
+    plan: MealPlan | null;
+    meals: Meal[];
+    selectedDate: string;
+    completions: MealCompletion[];
+    selections: MealSelections;
+    dayOffset: number;
+    currentMonth: number;
+    currentYear: number;
+    isLoading: boolean;
+    error: string | null;
+    lastRefresh: number | null;
+    showChangeRequestModal: boolean;
+    showOptionsSheet: boolean;
+    activeMealId: string | null;
+    inProgressMeals: Record<string, boolean>; // mealId -> inProgress status
+}
 
 const initialState: MealsState = {
     plan: null,
@@ -34,6 +51,7 @@ const initialState: MealsState = {
     showChangeRequestModal: false,
     showOptionsSheet: false,
     activeMealId: null,
+    inProgressMeals: {},
 };
 
 // ============================================================================
@@ -216,21 +234,41 @@ const mealsSlice = createSlice({
             action: PayloadAction<{
                 plan: MealPlan;
                 meals: Meal[];
-                completions: MealCompletion[];
+                completions?: MealCompletion[];
             }>
         ) => {
             state.plan = action.payload.plan;
             state.meals = action.payload.meals;
-            state.completions = action.payload.completions;
+            // Only update completions if provided - prevents wiping completions on plan refresh
+            if (action.payload.completions !== undefined) {
+                state.completions = action.payload.completions;
+            }
             state.isLoading = false;
             state.error = null;
             state.lastRefresh = Date.now();
         },
 
         /**
+         * Set meal completion progress
+         */
+        setMealInProgress: (state, action: PayloadAction<{ mealId: string; inProgress: boolean }>) => {
+            const { mealId, inProgress } = action.payload;
+            state.inProgressMeals[mealId] = inProgress;
+        },
+
+        /**
          * Reset meals state
          */
         resetMeals: () => initialState,
+
+        /**
+         * Clear daily state (for daily reset functionality)
+         */
+        clearDailyState: (state) => {
+            state.completions = [];
+            state.selections = {};
+            state.inProgressMeals = {};
+        },
     },
 });
 
@@ -253,6 +291,8 @@ export const selectMealsError = (state: MealsStateRoot) => state.meals.error;
 export const selectShowChangeRequestModal = (state: MealsStateRoot) => state.meals.showChangeRequestModal;
 export const selectShowOptionsSheet = (state: MealsStateRoot) => state.meals.showOptionsSheet;
 export const selectActiveMealId = (state: MealsStateRoot) => state.meals.activeMealId;
+export const selectMealsInProgressMeals = (state: MealsStateRoot) => state.meals.inProgressMeals;
+export const selectMealsIsMealInProgress = (mealId: string) => (state: MealsStateRoot) => state.meals.inProgressMeals[mealId] || false;
 
 // Computed selectors
 export const selectMealPlanFormat = (state: MealsStateRoot) => state.meals.plan?.format || 'general';
@@ -333,8 +373,10 @@ export const {
     setShowChangeRequestModal,
     setShowOptionsSheet,
     setActiveMeal,
+    setMealInProgress,
     setMealsData,
     resetMeals,
+    clearDailyState,
 } = mealsSlice.actions;
 
 export default mealsSlice.reducer;

@@ -35,14 +35,13 @@ export default function HomeScreen() {
         user,
         weightProgress,
         meals,
-        nutrition,
         waterIntake,
         planProgress,
+        dailyProgress,
         greeting,
         isLoading,
         error,
         refresh,
-        handleMealToggle,
         handleAddWater,
         handleRemoveWater,
     } = useHomeData();
@@ -62,10 +61,9 @@ export default function HomeScreen() {
         Alert.alert('تفاصيل الوزن', 'سيتم فتح تفاصيل الوزن قريباً');
     }, []);
 
-    const handleViewAllMeals = useCallback(() => {
-        // TODO: Navigate to meals screen
-        Alert.alert('الوجبات', 'سيتم فتح شاشة الوجبات قريباً');
-    }, []);
+    const handleViewAllMeals = useCallback((screen: string) => {
+        router.push(`/(app)/${screen}`);
+    }, [router]);
 
     const handleViewPlan = useCallback(() => {
         // TODO: Navigate to plan details
@@ -131,10 +129,10 @@ export default function HomeScreen() {
                 >
                     <MealsCard
                         meals={meals}
-                        nutrition={nutrition}
-                        onMealToggle={handleMealToggle}
-                        onViewAll={handleViewAllMeals}
+                        onNavigate={handleViewAllMeals}
                         isLoading={isLoading}
+                        error={error}
+                        onRetry={refresh}
                     />
                 </HomeErrorBoundary>
 
@@ -146,6 +144,7 @@ export default function HomeScreen() {
                     <QuickActions
                         waterIntake={waterIntake}
                         planProgress={planProgress}
+                        dailyProgress={dailyProgress}
                         onAddWater={handleAddWater}
                         onRemoveWater={handleRemoveWater}
                         onViewPlan={handleViewPlan}

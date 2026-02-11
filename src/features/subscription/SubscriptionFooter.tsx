@@ -44,6 +44,8 @@ interface SubscriptionFooterProps {
     disabled: boolean;
     /** Currently selected plan */
     selectedPlan?: SubscriptionPlan | null;
+    /** Screen mode: new subscription or upgrade */
+    mode?: 'new' | 'upgrade';
 }
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
@@ -59,6 +61,7 @@ function SubscriptionFooter({
     isLoading,
     disabled,
     selectedPlan,
+    mode = 'new',
 }: SubscriptionFooterProps) {
     const buttonScale = useSharedValue(1);
 
@@ -88,7 +91,9 @@ function SubscriptionFooter({
     }));
 
     const buttonText = selectedPlan
-        ? `اشترك الآن - ${selectedPlan.price} ${selectedPlan.currencyAr}`
+        ? mode === 'upgrade'
+            ? `تغيير الخطة - ${selectedPlan.price} ${selectedPlan.currencyAr}`
+            : `اشترك الآن - ${selectedPlan.price} ${selectedPlan.currencyAr}`
         : 'اختر خطة للمتابعة';
 
     return (

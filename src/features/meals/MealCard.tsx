@@ -24,6 +24,7 @@ interface MealCardProps {
     onCompleteMeal: () => void;
     onChangeMeal: () => void;
     onRequestChange: () => void;
+    isMealInProgress?: (mealId: string) => boolean;
 }
 
 /**
@@ -37,8 +38,10 @@ function MealCard({
     onCompleteMeal,
     onChangeMeal,
     onRequestChange,
+    isMealInProgress,
 }: MealCardProps) {
     const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
+    const isInProgress = isMealInProgress?.(meal.id) || false;
 
     // Check if all required categories have selections
     const isReadyToComplete = useMemo(() => {
@@ -74,11 +77,11 @@ function MealCard({
     }, [onSelectOption]);
 
     const handleComplete = useCallback(async () => {
-        if (isReadyToComplete) {
+        if (isReadyToComplete && !isInProgress) {
             await hapticSuccess();
             onCompleteMeal();
         }
-    }, [isReadyToComplete, onCompleteMeal]);
+    }, [isReadyToComplete, onCompleteMeal, isInProgress]);
 
     // =========================================================================
     // Completed State
@@ -98,7 +101,7 @@ function MealCard({
                     <View style={[styles.completedBadge, { flexDirection: isRTL ? 'row' : 'row-reverse' }]}>
                         <Ionicons name="checkmark-circle-sharp" size={20} color={colors.success} />
                         <Text style={styles.completedText}>{isRTL ? 'تم' : 'Done'}</Text>
-                    </View>                    
+                    </View>
                     <View style={[styles.mealInfo, { flexDirection: isRTL ? 'row' : 'row-reverse' }]}>
                         <Text style={styles.mealEmoji}>{meal.emoji || '🍽️'}</Text>
                         <Text style={[styles.mealName, isRTL && styles.textRTL]}>
@@ -116,8 +119,8 @@ function MealCard({
                         </Text>
                         {summary.map((item, i) => (
                             <View key={i} style={[styles.summaryItem, { flexDirection: isRTL ? 'row' : 'row-reverse' }]}>
-                                <Text style={styles.bulletPoint}>•</Text>
                                 <Text style={[styles.summaryText, isRTL && styles.textRTL]}>{item}</Text>
+                                <Text style={styles.bulletPoint}>•</Text>
                             </View>
                         ))}
                     </View>
@@ -150,7 +153,7 @@ function MealCard({
             <View style={[styles.mealHeader, { flexDirection: isRTL ? 'row' : 'row-reverse' }]}>
                 <TouchableOpacity onPress={onRequestChange} style={styles.moreButton}>
                     <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>                
+                </TouchableOpacity>
                 <View style={[styles.mealInfo, { flexDirection: isRTL ? 'row' : 'row-reverse' }]}>
                     <Text style={styles.mealEmoji}>{meal.emoji || '🍽️'}</Text>
                     <Text style={[styles.mealName, isRTL && styles.textRTL]}>
@@ -182,14 +185,29 @@ function MealCard({
                 style={[
                     styles.completeButton,
                     !isReadyToComplete && styles.completeButtonDisabled,
+                    isInProgress && styles.completeButtonInProgress,
                 ]}
                 onPress={handleComplete}
-                disabled={!isReadyToComplete}
+                disabled={!isReadyToComplete || isInProgress}
                 activeOpacity={0.7}
             >
-                <Text style={styles.completeButtonText}>
-                    {isRTL ? 'أكلت هذا' : 'I Ate This'}
-                </Text>
+                {isInProgress ? (
+                    <View style={styles.buttonContent}>
+                        <Ionicons
+                            name="time"
+                            size={horizontalScale(16)}
+                            color={colors.white}
+                            style={styles.buttonIcon}
+                        />
+                        <Text style={styles.completeButtonText}>
+                            {isRTL ? 'جاري المعالجة...' : 'Processing...'}
+                        </Text>
+                    </View>
+                ) : (
+                    <Text style={styles.completeButtonText}>
+                        {isRTL ? 'أكلت هذا' : 'I Ate This'}
+                    </Text>
+                )}
             </TouchableOpacity>
 
             {!isReadyToComplete && (
@@ -245,7 +263,7 @@ const CategorySection = memo(({
                             {isRTL ? `+${category.options.length - 3} المزيد` : `+${category.options.length - 3} more`}
                         </Text>
                     </TouchableOpacity>
-                )}                
+                )}
             </View>
 
             {/* Options */}
@@ -505,6 +523,19 @@ const styles = StyleSheet.create({
         fontSize: ScaleFontSize(16),
         fontWeight: '600',
         color: colors.white,
+    },
+    completeButtonInProgress: {
+        backgroundColor: colors.textSecondary,
+        opacity: 0.8,
+    },
+    buttonContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: horizontalScale(8),
+    },
+    buttonIcon: {
+        transform: [{ rotate: '0deg' }],
     },
     selectHint: {
         fontSize: ScaleFontSize(12),

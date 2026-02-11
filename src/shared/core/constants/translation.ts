@@ -264,7 +264,7 @@ export const profileTranslations = {
 
     // Weight Progress
     weightProgress: isRTL ? 'تقدم الوزن' : 'Weight Progress',
-    startWeight: isRTL ? 'الوزن البدائي' : 'Start Weight',
+    startWeight: isRTL ? 'الوزن' : 'Start Weight',
     currentWeight: isRTL ? 'الوزن الحالي' : 'Current Weight',
     targetWeight: isRTL ? 'الوزن المستهدف' : 'Target Weight',
     kgLost: isRTL ? 'كجم مفقود' : 'kg lost',

@@ -51,7 +51,7 @@ function WeightChart({
         const effectiveHeight = chartHeight - paddingY * 2;
 
         const points = data.map((entry, index) => {
-            const x = paddingX + (index / (data.length - 1 || 1)) * effectiveWidth;
+            const x = (chartWidth - paddingX) - (index / (data.length - 1 || 1)) * effectiveWidth;
             const y = paddingY + (1 - (entry.weight - min) / range) * effectiveHeight;
             return { x, y, weight: entry.weight, date: entry.date };
         });
@@ -69,7 +69,7 @@ function WeightChart({
         const labels = data.map((entry, index) => {
             const date = new Date(entry.date);
             return {
-                x: paddingX + (index / (data.length - 1 || 1)) * effectiveWidth,
+                x: (chartWidth - paddingX) - (index / (data.length - 1 || 1)) * effectiveWidth,
                 text: DAYS_AR[date.getDay()],
             };
         });
@@ -115,7 +115,7 @@ function WeightChart({
 
                 {/* Area fill */}
                 <Path
-                    d={`${chartData.path} L ${chartData.dots[chartData.dots.length - 1]?.x} ${chartHeight - paddingY} L ${paddingX} ${chartHeight - paddingY} Z`}
+                    d={`${chartData.path} L ${chartData.dots[chartData.dots.length - 1]?.x} ${chartHeight - paddingY} L ${chartData.dots[0]?.x} ${chartHeight - paddingY} Z`}
                     fill="url(#areaGradient)"
                 />
 

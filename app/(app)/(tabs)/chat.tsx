@@ -4,32 +4,41 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, KeyboardAvoidingView, Platform, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/src/shared/core/constants/Theme';
+import { useIsFocused } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '@/src/shared/store';
-import { selectCurrentDoctor, selectConnectionStatus, setCurrentDoctor, setActiveConversation } from '@/src/shared/store/slices/chatSlice';
+import {
+    selectConnectionStatus,
+    selectCurrentDoctor,
+    setActiveConversation,
+    setCurrentDoctor,
+    setDoctorAvailabilityStatus,
+    resetUnreadCount,
+} from '@/src/shared/store/slices/chatSlice';
 import { selectToken } from '@/src/shared/store/selectors/auth.selectors';
-import { getMealPlanSummary, getOrCreateConversation } from '@/src/shared/services/backend/api';
 import type { ChatConversationResponse } from '@/src/shared/services/backend/api';
+import { getDoctorAvailability, getMealPlanSummary, getOrCreateConversation } from '@/src/shared/services/backend/api';
 
 // Hooks
 import {
     useChatMessages,
+    useMessageActions,
     useMessageSending,
     useVoiceRecording,
-    useMessageActions,
-    useChatSocket,
 } from '@/src/hooks/chat';
+import { chatSocketService } from '@/src/shared/services/chat/socketService';
 
 // Components
 import {
+    AttachmentMenu,
     ChatHeader,
-    MessageList,
-    MessageInput,
-    VoiceRecorder,
     MessageActions,
+    MessageInput,
+    MessageList,
+    VoiceRecorder,
 } from '@/src/features/chat';
 
 // ============================================================================
@@ -42,10 +51,18 @@ export default function ChatScreen() {
     const doctor = useAppSelector(selectCurrentDoctor);
     const connectionStatus = useAppSelector(selectConnectionStatus);
     const token = useAppSelector(selectToken);
+    const isFocused = useIsFocused();
 
-    // Custom hooks
-    // Socket connection - initializes on mount
-    const { startTyping, stopTyping } = useChatSocket();
+    // Reset unread count when screen is focused
+    useEffect(() => {
+        if (isFocused) {
+            dispatch(resetUnreadCount());
+        }
+    }, [isFocused, dispatch]);
+
+    // Typing helpers (socket is managed in tabs _layout)
+    const startTyping = useCallback(() => chatSocketService.startTyping(), []);
+    const stopTyping = useCallback(() => chatSocketService.stopTyping(), []);
 
     const {
         messages,
@@ -62,6 +79,8 @@ export default function ChatScreen() {
         sendTextMessage,
         sendVoiceMessage,
         pickAndSendImage,
+        pickAndSendDocument,
+        takeAndSendPhoto,
     } = useMessageSending();
 
     const {
@@ -94,6 +113,7 @@ export default function ChatScreen() {
     // Local state
     const [messageText, setMessageText] = useState('');
     const [refreshing, setRefreshing] = useState(false);
+    const [isAttachmentMenuVisible, setIsAttachmentMenuVisible] = useState(false);
 
     // Voice recording visibility
     const isVoiceRecording = recordingState !== 'idle';
@@ -139,7 +159,7 @@ export default function ChatScreen() {
                     fullName: resolvedName,
                     avatarUrl: summaryDoctor.avatarUrl || conversationData?.avatar || undefined,
                     specialization: undefined,
-                    isOnline: conversationData?.isOnline ?? false,
+                    isOnline: false,
                 }));
             } catch (error) {
                 console.error('[Chat] Failed to load doctor data:', error);
@@ -152,6 +172,43 @@ export default function ChatScreen() {
             isMounted = false;
         };
     }, [dispatch, token]);
+
+    useEffect(() => {
+        let isMounted = true;
+        let intervalId: ReturnType<typeof setInterval> | null = null;
+
+        const loadAvailability = async () => {
+            if (!doctor?.id || !token) return;
+
+            try {
+                const response = await getDoctorAvailability(doctor.id, token);
+                if (!response.success || !response.data || !isMounted) return;
+
+                dispatch(setDoctorAvailabilityStatus({
+                    doctorId: response.data.doctorId,
+                    isOnline: response.data.isOnline,
+                    isSocketOnline: response.data.isSocketOnline,
+                    isScheduleAvailable: response.data.isScheduleAvailable,
+                    timezone: response.data.timezone,
+                    dayKey: response.data.dayKey ?? null,
+                    minutes: response.data.minutes ?? null,
+                    lastSeen: response.data.lastSeen ?? undefined,
+                }));
+            } catch (error) {
+                console.warn('[Chat] Failed to load doctor availability:', error);
+            }
+        };
+
+        loadAvailability();
+        intervalId = setInterval(loadAvailability, 60000);
+
+        return () => {
+            isMounted = false;
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+        };
+    }, [dispatch, doctor?.id, token]);
 
     // ========================================================================
     // Handlers
@@ -195,8 +252,29 @@ export default function ChatScreen() {
      * Handle attachment press
      */
     const handleAttachmentPress = useCallback(async () => {
-        await pickAndSendImage();
-    }, [pickAndSendImage]);
+        setIsAttachmentMenuVisible(true);
+    }, []);
+
+    /**
+     * Handle attachment selection
+     */
+    const handleAttachmentSelect = useCallback(async (type: 'camera' | 'gallery' | 'document') => {
+        // Close modal first
+        setIsAttachmentMenuVisible(false);
+
+        // Then handle the selection
+        switch (type) {
+            case 'camera':
+                await takeAndSendPhoto();
+                break;
+            case 'gallery':
+                await pickAndSendImage();
+                break;
+            case 'document':
+                await pickAndSendDocument();
+                break;
+        }
+    }, [takeAndSendPhoto, pickAndSendImage, pickAndSendDocument]);
 
     /**
      * Handle refresh
@@ -312,6 +390,13 @@ export default function ChatScreen() {
                     onClose={hideActionSheet}
                     onAction={handleAction}
                     availableActions={selectedMessage ? getAvailableActions(selectedMessage) : []}
+                />
+
+                {/* Attachment Menu */}
+                <AttachmentMenu
+                    isVisible={isAttachmentMenuVisible}
+                    onClose={() => setIsAttachmentMenuVisible(false)}
+                    onSelect={handleAttachmentSelect}
                 />
             </KeyboardAvoidingView>
         </SafeAreaView>

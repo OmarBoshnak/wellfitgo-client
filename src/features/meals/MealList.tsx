@@ -24,6 +24,7 @@ interface MealListProps {
     onChangeMeal: (mealId: string) => void;
     onRequestChange: (mealId: string) => void;
     isLoading?: boolean;
+    isMealInProgress?: (mealId: string) => boolean;
 }
 
 /**
@@ -40,6 +41,7 @@ function MealList({
     onChangeMeal,
     onRequestChange,
     isLoading,
+    isMealInProgress,
 }: MealListProps) {
     const renderMeal = useCallback(({ item, index }: { item: Meal; index: number }) => {
         if (format === 'daily') {
@@ -61,9 +63,10 @@ function MealList({
                 onCompleteMeal={() => onMealToggle(item.id)}
                 onChangeMeal={() => onChangeMeal(item.id)}
                 onRequestChange={() => onRequestChange(item.id)}
+                isMealInProgress={isMealInProgress}
             />
         );
-    }, [format, selections, onMealToggle, onMealOptions, onSelectOption, onOpenSheet, onChangeMeal, onRequestChange]);
+    }, [format, selections, onMealToggle, onMealOptions, onSelectOption, onOpenSheet, onChangeMeal, onRequestChange, isMealInProgress]);
 
     const keyExtractor = useCallback((item: Meal) => item.id, []);
 

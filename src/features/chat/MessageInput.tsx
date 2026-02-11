@@ -180,7 +180,7 @@ const MessageInput: React.FC<MessageInputProps> = memo(({
                     accessibilityRole="button"
                 >
                     <Ionicons
-                        name="image-outline"
+                        name="attach-outline"
                         size={24}
                         color={isDisabled ? colors.textSecondary : colors.primaryDark}
                     />

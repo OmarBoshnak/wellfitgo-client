@@ -19,6 +19,7 @@ import {
     verticalScale,
     ScaleFontSize,
 } from '@/src/shared/core/utils/scaling';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface SubscriptionHeaderProps {
     /** Callback when close/back button is pressed */
@@ -40,6 +41,7 @@ function SubscriptionHeader({
     subtitle = 'ابدأ رحلتك نحو حياة صحية أفضل',
     showCloseButton = true,
 }: SubscriptionHeaderProps) {
+    const insets = useSafeAreaInsets();
     const closeScale = useSharedValue(1);
 
     const handleClosePressIn = useCallback(() => {
@@ -60,7 +62,7 @@ function SubscriptionHeader({
     }));
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container,{paddingTop:insets.top}]}>
             {/* Top row with close button */}
             <View style={styles.topRow}>
                 {showCloseButton && onClose ? (

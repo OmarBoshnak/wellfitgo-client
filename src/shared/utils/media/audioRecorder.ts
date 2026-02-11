@@ -4,18 +4,21 @@
  */
 
 import {
-    createAudioPlayer,
-    AudioPlayer,
-    requestRecordingPermissionsAsync,
-    setAudioModeAsync,
-    RecordingOptions,
-    AudioQuality,
     AudioModule,
+    createAudioPlayer,
+    RecordingOptions,
     RecordingPresets,
-    IOSOutputFormat
+    requestRecordingPermissionsAsync,
+    setAudioModeAsync
 } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
 import type { RecordingState, VoiceRecordingData } from '@/src/shared/types/chat';
+
+// Fallback for native module if ExpoAudio is missing
+const isAudioModuleAvailable = !!AudioModule;
+if (!isAudioModuleAvailable) {
+    console.warn('ExpoAudio native module is not available. Audio recording/playback will be disabled.');
+}
 
 // ============================================================================
 // Types
@@ -41,8 +44,8 @@ export interface AudioPlaybackState {
 // ============================================================================
 
 const RECORDING_OPTIONS: RecordingOptions = {
-    ...RecordingPresets.HIGH_QUALITY,
-    isMeteringEnabled: true,
+    ...RecordingPresets.LOW_QUALITY,
+    isMeteringEnabled: false, // Disable for performance
 };
 
 // ============================================================================
@@ -77,7 +80,7 @@ export const setAudioModeForPlayback = async (): Promise<void> => {
     await setAudioModeAsync({
         allowsRecording: false,
         playsInSilentMode: true,
-        shouldPlayInBackground: false,
+        shouldPlayInBackground: true,
         interruptionMode: 'doNotMix',
         shouldRouteThroughEarpiece: false,
     });
@@ -92,7 +95,8 @@ export const setAudioModeForPlayback = async (): Promise<void> => {
  * Handles voice recording lifecycle with metering for waveform visualization
  */
 export class AudioRecorderManager {
-    private recording: InstanceType<typeof AudioModule.AudioRecorder> | null = null;
+    private recording: any = null;
+    private isAvailable: boolean = isAudioModuleAvailable;
     private meteringValues: number[] = [];
     private meteringInterval: ReturnType<typeof setInterval> | null = null;
     private startTime: number = 0;
@@ -101,6 +105,10 @@ export class AudioRecorderManager {
      * Start recording
      */
     async startRecording(): Promise<void> {
+        if (!this.isAvailable) {
+            console.warn('[AudioRecorder] AudioModule not available');
+            throw new Error('Audio recording is not supported on this device/environment');
+        }
         console.log('[AudioRecorder] requestMicrophonePermission...');
         const hasPermission = await requestMicrophonePermission();
         console.log('[AudioRecorder] Permission granted:', hasPermission);
@@ -119,7 +127,7 @@ export class AudioRecorderManager {
             console.log('[AudioRecorder] Prepared.');
         } catch (error) {
             console.error('[AudioRecorder] Failed to prepare recording:', error);
-            // If prepare fails, we should probably stop here, but let's try to proceed 
+            // If prepare fails, we should probably stop here, but let's try to proceed
             // incase the constructor did it.
             // But usually this means we can't record.
         }
@@ -335,9 +343,10 @@ export class AudioRecorderManager {
  * Handles voice message playback with progress tracking
  */
 export class AudioPlayerManager {
-    private player: AudioPlayer | null = null;
-    private onStatusUpdate: ((status: AudioPlaybackState) => void) | null = null;
     public currentUri: string | null = null;
+    private player: any = null;
+    private isAvailable: boolean = isAudioModuleAvailable;
+    private onStatusUpdate: ((status: AudioPlaybackState) => void) | null = null;
     private isPlayingState: boolean = false;
 
     /**
@@ -347,8 +356,14 @@ export class AudioPlayerManager {
         uri: string,
         onStatusUpdate?: (status: AudioPlaybackState) => void
     ): Promise<void> {
-        // Unload previous sound if exists
-        if (this.player && this.onStatusUpdate) {
+        if (!this.isAvailable) {
+            console.warn('[AudioPlayerManager] AudioModule not available');
+            return;
+        }
+        // console.log('[AudioPlayerManager] loadAndPlay called for:', uri);
+
+        // Notify current listener that we are stopping/switching
+        if (this.onStatusUpdate) {
             this.onStatusUpdate({
                 isPlaying: false,
                 isLoaded: false,
@@ -358,15 +373,18 @@ export class AudioPlayerManager {
             });
         }
 
+        // Unload previous sound if exists
         await this.unload();
+
+        // Delay to allow CoreAudio to clean up previous session/device connection
+        // Especially helpful on iOS Simulator to avoid "Abandoning I/O cycle" errors
+        // Increased to 300ms for better reliability
+        await new Promise(resolve => setTimeout(resolve, 300));
 
         this.currentUri = uri;
         this.onStatusUpdate = onStatusUpdate || null;
-        try {
-            await setAudioModeForPlayback();
-        } catch (error) {
-            console.warn('[AudioPlayerManager] Failed to set audio mode:', error);
-        }
+
+        await this.setAudioModeForPlayback();
 
         try {
             // Create player with the audio source
@@ -394,52 +412,6 @@ export class AudioPlayerManager {
             throw error;
         }
     }
-
-    /**
-     * Handle playback status updates
-     */
-    private handleStatusUpdate = (status: any) => {
-        // console.log('[AudioPlayerManager] Status update:', status);
-
-        // status is AudioStatus from expo-audio
-        if (!status || !status.isLoaded) {
-            // console.log('[AudioPlayerManager] Audio not loaded or status null');
-            this.onStatusUpdate?.({
-                isPlaying: false,
-                isLoaded: false,
-                positionMillis: 0,
-                durationMillis: 0,
-                progress: 0,
-            });
-            this.isPlayingState = false;
-            return;
-        }
-
-        const durationMillis = status.duration ? status.duration * 1000 : 0;
-        const positionMillis = status.currentTime ? status.currentTime * 1000 : 0;
-
-        const progress = durationMillis > 0
-            ? positionMillis / durationMillis
-            : 0;
-
-        const playbackState: AudioPlaybackState = {
-            isPlaying: status.playing || false,
-            isLoaded: status.isLoaded || false,
-            positionMillis,
-            durationMillis,
-            progress,
-        };
-
-        this.isPlayingState = status.playing || false;
-        // console.log('[AudioPlayerManager] Playback state:', playbackState);
-        this.onStatusUpdate?.(playbackState);
-
-        // Auto-cleanup when finished
-        if (status.didJustFinish || (progress >= 1 && status.playing === false)) {
-            console.log('[AudioPlayerManager] Playback finished, unloading');
-            this.unload();
-        }
-    };
 
     /**
      * Pause playback
@@ -498,9 +470,25 @@ export class AudioPlayerManager {
     }
 
     /**
+     * Set playback rate (speed control)
+     * @param rate - Playback rate (e.g., 1, 1.5, 2)
+     */
+    setRate(rate: number): void {
+        if (this.player) {
+            try {
+                // expo-audio player supports rate property
+                this.player.rate = rate;
+            } catch (error) {
+                console.warn('[AudioPlayerManager] Failed to set playback rate:', error);
+            }
+        }
+    }
+
+    /**
      * Unload sound
      */
     async unload(): Promise<void> {
+        // console.log('[AudioPlayerManager] Unload called');
         // Notify current listener that we are stopping
         if (this.onStatusUpdate) {
             this.onStatusUpdate({
@@ -514,10 +502,13 @@ export class AudioPlayerManager {
 
         if (this.player) {
             try {
+                // Stop before removing to ensure resources are released cleanly
+                await this.player.pause();
                 // remove() releases resources
                 this.player.remove();
-            } catch {
+            } catch (error) {
                 // Ignore unload errors
+                // console.log('[AudioPlayerManager] Unload error:', error);
             }
             this.player = null;
         }
@@ -525,6 +516,69 @@ export class AudioPlayerManager {
         this.currentUri = null;
         this.isPlayingState = false;
     }
+
+    /**
+     * Set audio mode for playback
+     */
+    private async setAudioModeForPlayback(): Promise<void> {
+        try {
+            await setAudioModeAsync({
+                allowsRecording: false,
+                playsInSilentMode: true,
+                shouldPlayInBackground: true,
+                interruptionMode: 'doNotMix',
+                shouldRouteThroughEarpiece: false,
+            });
+        } catch (error) {
+            console.warn('[AudioPlayerManager] Failed to set audio mode:', error);
+        }
+    }
+
+    /**
+     * Handle playback status updates
+     */
+    private handleStatusUpdate = (status: any) => {
+        // console.log('[AudioPlayerManager] Status update:', status);
+
+        // status is AudioStatus from expo-audio
+        if (!status || !status.isLoaded) {
+            // console.log('[AudioPlayerManager] Audio not loaded or status null');
+            this.onStatusUpdate?.({
+                isPlaying: false,
+                isLoaded: false,
+                positionMillis: 0,
+                durationMillis: 0,
+                progress: 0,
+            });
+            this.isPlayingState = false;
+            return;
+        }
+
+        const durationMillis = status.duration ? status.duration * 1000 : 0;
+        const positionMillis = status.currentTime ? status.currentTime * 1000 : 0;
+
+        const progress = durationMillis > 0
+            ? positionMillis / durationMillis
+            : 0;
+
+        const playbackState: AudioPlaybackState = {
+            isPlaying: status.playing || false,
+            isLoaded: status.isLoaded || false,
+            positionMillis,
+            durationMillis,
+            progress,
+        };
+
+        this.isPlayingState = status.playing || false;
+        // console.log('[AudioPlayerManager] Playback state:', playbackState);
+        this.onStatusUpdate?.(playbackState);
+
+        // Auto-cleanup when finished
+        if (status.didJustFinish || (progress >= 1 && status.playing === false)) {
+            console.log('[AudioPlayerManager] Playback finished, unloading');
+            this.unload();
+        }
+    };
 }
 
 // ============================================================================

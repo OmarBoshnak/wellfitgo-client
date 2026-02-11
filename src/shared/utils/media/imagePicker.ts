@@ -4,6 +4,7 @@
  */
 
 import * as ImagePicker from 'expo-image-picker';
+import { requestMediaLibraryPermission, requestCameraPermission } from '../permissions';
 
 // ============================================================================
 // Types
@@ -36,26 +37,6 @@ const DEFAULT_COMPRESSION: CompressionOptions = {
 };
 
 // ============================================================================
-// Permission Handling
-// ============================================================================
-
-/**
- * Request camera roll permissions
- */
-export const requestMediaLibraryPermission = async (): Promise<boolean> => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    return status === 'granted';
-};
-
-/**
- * Request camera permissions
- */
-export const requestCameraPermission = async (): Promise<boolean> => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    return status === 'granted';
-};
-
-// ============================================================================
 // Image Picking
 // ============================================================================
 
@@ -65,31 +46,37 @@ export const requestCameraPermission = async (): Promise<boolean> => {
 export const pickImageFromLibrary = async (
     options?: ImagePicker.ImagePickerOptions
 ): Promise<ImagePickerResult | null> => {
-    const hasPermission = await requestMediaLibraryPermission();
-    if (!hasPermission) {
-        throw new Error('Camera roll permission not granted');
-    }
+    try {
+        // Request permission using utility
+        const hasPermission = await requestMediaLibraryPermission();
+        if (!hasPermission) {
+            return null;
+        }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 1,
-        ...options,
-    });
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: true,
+            aspect: [4, 3],
+            quality: 1,
+            ...options,
+        });
 
-    if (result.canceled || !result.assets?.[0]) {
+        if (result.canceled || !result.assets?.[0]) {
+            return null;
+        }
+
+        const asset = result.assets[0];
+        return {
+            uri: asset.uri,
+            width: asset.width,
+            height: asset.height,
+            base64: asset.base64 ?? undefined,
+            fileSize: asset.fileSize,
+        };
+    } catch (error) {
+        console.error('Error picking image from library:', error);
         return null;
     }
-
-    const asset = result.assets[0];
-    return {
-        uri: asset.uri,
-        width: asset.width,
-        height: asset.height,
-        base64: asset.base64 ?? undefined,
-        fileSize: asset.fileSize,
-    };
 };
 
 /**
@@ -98,30 +85,36 @@ export const pickImageFromLibrary = async (
 export const takePhoto = async (
     options?: ImagePicker.ImagePickerOptions
 ): Promise<ImagePickerResult | null> => {
-    const hasPermission = await requestCameraPermission();
-    if (!hasPermission) {
-        throw new Error('Camera permission not granted');
-    }
+    try {
+        // Request permission using utility
+        const hasPermission = await requestCameraPermission();
+        if (!hasPermission) {
+            return null;
+        }
 
-    const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 1,
-        ...options,
-    });
+        const result = await ImagePicker.launchCameraAsync({
+            allowsEditing: true,
+            aspect: [4, 3],
+            quality: 1,
+            ...options,
+        });
 
-    if (result.canceled || !result.assets?.[0]) {
+        if (result.canceled || !result.assets?.[0]) {
+            return null;
+        }
+
+        const asset = result.assets[0];
+        return {
+            uri: asset.uri,
+            width: asset.width,
+            height: asset.height,
+            base64: asset.base64 ?? undefined,
+            fileSize: asset.fileSize,
+        };
+    } catch (error) {
+        console.error('Error taking photo:', error);
         return null;
     }
-
-    const asset = result.assets[0];
-    return {
-        uri: asset.uri,
-        width: asset.width,
-        height: asset.height,
-        base64: asset.base64 ?? undefined,
-        fileSize: asset.fileSize,
-    };
 };
 
 // ============================================================================

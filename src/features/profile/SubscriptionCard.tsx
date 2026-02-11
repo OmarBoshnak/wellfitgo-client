@@ -4,10 +4,11 @@
  */
 
 import React, { memo } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { useRouter } from 'expo-router';
 
 import { colors, shadows } from '@/src/shared/core/constants/Theme';
 import { horizontalScale, verticalScale, ScaleFontSize } from '@/src/shared/core/utils/scaling';
@@ -27,6 +28,7 @@ function SubscriptionCard({
     onManage,
 }: SubscriptionCardProps) {
     const t = profileTranslations;
+    const router = useRouter();
 
     const handleManage = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -49,6 +51,12 @@ function SubscriptionCard({
                     </View>
                     <Text style={styles.emptyTitle}>{t.subscription}</Text>
                     <Text style={styles.emptyText}>لا يوجد اشتراك حالي</Text>
+                    <TouchableOpacity 
+                        style={styles.manageButtonEmpty} 
+                        onPress={() => router.push('/(app)/payment/manage-subscription' as never)}
+                    >
+                        <Text style={styles.manageButtonText}>{isRTL ? 'إدارة الاشتراك' : 'Manage Subscription'}</Text>
+                    </TouchableOpacity>
                 </View>
             </Animated.View>
         );
@@ -296,6 +304,19 @@ const styles = StyleSheet.create({
         fontSize: ScaleFontSize(13),
         color: colors.textSecondary,
         marginBottom: verticalScale(16),
+    },
+    manageButtonEmpty: {
+        backgroundColor: colors.primaryDark,
+        paddingVertical: verticalScale(12),
+        paddingHorizontal: horizontalScale(24),
+        borderRadius: horizontalScale(8),
+        alignItems: 'center',
+        marginTop: verticalScale(8),
+    },
+    manageButtonText: {
+        fontSize: ScaleFontSize(14),
+        fontWeight: '600',
+        color: colors.white,
     },
 });
 

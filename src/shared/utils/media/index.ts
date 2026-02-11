@@ -5,8 +5,6 @@
 
 // Image Picker
 export {
-    requestMediaLibraryPermission,
-    requestCameraPermission,
     pickImageFromLibrary,
     takePhoto,
     compressImage,

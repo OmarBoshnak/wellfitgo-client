@@ -40,7 +40,7 @@ interface CalendarDayCellProps {
     index: number;
 }
 
-const CalendarDayCell = memo(({ day, isSelected, onPress, index }: CalendarDayCellProps) => {
+const CalendarDayCell = memo(function CalendarDayCell({ day, isSelected, onPress, index }: CalendarDayCellProps) {
     const scale = useSharedValue(1);
     const hasCompletion = day.status && day.status.completed > 0;
     const isAllComplete = day.status && day.status.completed === day.status.total && day.status.total > 0;
@@ -232,7 +232,7 @@ interface NavButtonProps {
     label: string;
 }
 
-const NavButton = memo(({ icon, onPress, label }: NavButtonProps) => {
+const NavButton = memo(function NavButton({ icon, onPress, label }: NavButtonProps) {
     const scale = useSharedValue(1);
 
     const handlePressIn = () => {

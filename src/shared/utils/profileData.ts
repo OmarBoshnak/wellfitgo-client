@@ -4,14 +4,14 @@
  */
 
 import {
-    Profile,
-    Subscription,
-    CoachPlan,
     Coach,
-    ProfileSettings,
-    WeightProgress,
-    WeightEntry,
+    CoachPlan,
     DEFAULT_PROFILE_SETTINGS,
+    Profile,
+    ProfileSettings,
+    Subscription,
+    WeightEntry,
+    WeightProgress,
 } from '@/src/shared/types/profile';
 
 // ============================================================================
@@ -79,12 +79,12 @@ export const mockSettings: ProfileSettings = {
 
 /** Mock weight history */
 export const mockWeightHistory: WeightEntry[] = [
-    { date: '2024-01-01', weight: 95, timestamp: Date.now() - 30 * 24 * 60 * 60 * 1000 },
-    { date: '2024-01-08', weight: 93.5, timestamp: Date.now() - 23 * 24 * 60 * 60 * 1000 },
-    { date: '2024-01-15', weight: 91.8, timestamp: Date.now() - 16 * 24 * 60 * 60 * 1000 },
-    { date: '2024-01-22', weight: 90.2, timestamp: Date.now() - 9 * 24 * 60 * 60 * 1000 },
-    { date: '2024-01-29', weight: 88.5, timestamp: Date.now() - 2 * 24 * 60 * 60 * 1000 },
-    { date: '2024-01-31', weight: 88, timestamp: Date.now() },
+    {date: '2024-01-01', weight: 95, timestamp: Date.now() - 30 * 24 * 60 * 60 * 1000},
+    {date: '2024-01-08', weight: 93.5, timestamp: Date.now() - 23 * 24 * 60 * 60 * 1000},
+    {date: '2024-01-15', weight: 91.8, timestamp: Date.now() - 16 * 24 * 60 * 60 * 1000},
+    {date: '2024-01-22', weight: 90.2, timestamp: Date.now() - 9 * 24 * 60 * 60 * 1000},
+    {date: '2024-01-29', weight: 88.5, timestamp: Date.now() - 2 * 24 * 60 * 60 * 1000},
+    {date: '2024-01-31', weight: 88, timestamp: Date.now()},
 ];
 
 // ============================================================================
@@ -113,12 +113,25 @@ export const fetchMockProfileData = async (): Promise<{
 
 /**
  * Calculate weight progress
+ * @param profile - User profile with weight data
+ * @param goalType - Optional goal type ('lose' | 'gain' | 'maintain') for dynamic target calculation
+ * @returns WeightProgress object with calculated metrics
  */
-export const calculateWeightProgress = (profile: Profile): WeightProgress => {
-    const { startWeight, currentWeight, targetWeight } = profile;
-    const totalToLose = startWeight - targetWeight;
+export const calculateWeightProgress = (
+    profile: Profile,
+    goalType?: 'lose' | 'gain' | 'maintain'
+): WeightProgress => {
+    const { startWeight, currentWeight, height, age, gender, targetWeight: storedTargetWeight } = profile;
+
+    // Calculate dynamic target if goalType is provided, otherwise use stored target
+    let effectiveTargetWeight = storedTargetWeight;
+    if (goalType && height && age) {
+        effectiveTargetWeight = calculateTargetWeight(currentWeight, height, age, gender, goalType);
+    }
+
+    const totalToLose = startWeight - effectiveTargetWeight;
     const totalLost = startWeight - currentWeight;
-    const remainingToGoal = Math.max(currentWeight - targetWeight, 0);
+    const remainingToGoal = Math.max(currentWeight - effectiveTargetWeight, 0);
 
     // Calculate progress percentage
     let progressPercentage = 0;
@@ -141,7 +154,7 @@ export const calculateWeightProgress = (profile: Profile): WeightProgress => {
     return {
         startWeight,
         currentWeight,
-        targetWeight,
+        targetWeight: effectiveTargetWeight,
         totalToLose: Math.max(totalToLose, 0),
         totalLost: Math.max(totalLost, 0),
         remainingToGoal,
@@ -171,6 +184,101 @@ export const calculateBMI = (
         value: Math.round(bmi * 10) / 10,
         category,
     };
+};
+
+/**
+ * Calculate ideal weight based on height, age, and gender
+ * Uses BMI-based calculation with adjustments for age and gender
+ * @param heightCm - Height in centimeters
+ * @param age - Age in years
+ * @param gender - 'male' or 'female'
+ * @returns Object with min, max, and recommended ideal weight
+ */
+export const calculateIdealWeight = (
+    heightCm: number,
+    age: number,
+    gender: 'male' | 'female'
+): { min: number; max: number; recommended: number } => {
+    const heightM = heightCm / 100;
+
+    // BMI range for healthy weight: 18.5 - 24.9
+    // Adjust target BMI based on age (slightly higher BMI acceptable for older adults)
+    let targetBMI = 22; // Default middle of healthy range
+
+    if (age < 25) {
+        targetBMI = 21.5;
+    } else if (age >= 25 && age < 45) {
+        targetBMI = 22;
+    } else if (age >= 45 && age < 65) {
+        targetBMI = 23;
+    } else {
+        targetBMI = 24; // Slightly higher for seniors
+    }
+
+    // Gender adjustment (men typically have higher muscle mass)
+    if (gender === 'male') {
+        targetBMI += 0.5;
+    } else {
+        targetBMI -= 0.5;
+    }
+
+    const minWeight = Math.round(18.5 * heightM * heightM * 10) / 10;
+    const maxWeight = Math.round(24.9 * heightM * heightM * 10) / 10;
+    const recommendedWeight = Math.round(targetBMI * heightM * heightM * 10) / 10;
+
+    return {
+        min: minWeight,
+        max: maxWeight,
+        recommended: recommendedWeight,
+    };
+};
+
+/**
+ * Calculate target weight based on goal type and health data
+ * @param currentWeight - Current weight in kg
+ * @param heightCm - Height in centimeters
+ * @param age - Age in years
+ * @param gender - 'male' or 'female'
+ * @param goalType - 'lose' | 'gain' | 'maintain'
+ * @returns Target weight in kg
+ */
+export const calculateTargetWeight = (
+    currentWeight: number,
+    heightCm: number,
+    age: number,
+    gender: 'male' | 'female',
+    goalType: 'lose' | 'gain' | 'maintain'
+): number => {
+    const idealWeight = calculateIdealWeight(heightCm, age, gender);
+
+    switch (goalType) {
+        case 'lose':
+            // Target is the recommended ideal weight if current > recommended
+            // Otherwise target 5% below current (minimum at healthy min)
+            if (currentWeight > idealWeight.recommended) {
+                return idealWeight.recommended;
+            }
+            return Math.max(idealWeight.min, Math.round((currentWeight * 0.95) * 10) / 10);
+
+        case 'gain':
+            // Target is the recommended ideal weight if current < recommended
+            // Otherwise target 5% above current (maximum at healthy max)
+            if (currentWeight < idealWeight.recommended) {
+                return idealWeight.recommended;
+            }
+            return Math.min(idealWeight.max, Math.round((currentWeight * 1.05) * 10) / 10);
+
+        case 'maintain':
+        default:
+            // Keep current weight if within healthy range, otherwise move to nearest boundary
+            if (currentWeight < idealWeight.min) {
+                return idealWeight.min;
+            }
+            if (currentWeight > idealWeight.max) {
+                return idealWeight.max;
+            }
+            return currentWeight;
+    }
 };
 
 /**
@@ -231,11 +339,11 @@ export const getSubscriptionStatusLabel = (
     isRTL: boolean
 ): { label: string; color: string } => {
     const labels = {
-        active: { ar: 'نشط', en: 'Active', color: '#22C55E' },
-        inactive: { ar: 'غير نشط', en: 'Inactive', color: '#9CA3AF' },
-        trial: { ar: 'تجريبي', en: 'Trial', color: '#3B82F6' },
-        expired: { ar: 'منتهي', en: 'Expired', color: '#EF4444' },
-        cancelled: { ar: 'ملغي', en: 'Cancelled', color: '#F59E0B' },
+        active: {ar: 'نشط', en: 'Active', color: '#22C55E'},
+        inactive: {ar: 'غير نشط', en: 'Inactive', color: '#9CA3AF'},
+        trial: {ar: 'تجريبي', en: 'Trial', color: '#3B82F6'},
+        expired: {ar: 'منتهي', en: 'Expired', color: '#EF4444'},
+        cancelled: {ar: 'ملغي', en: 'Cancelled', color: '#F59E0B'},
     };
 
     const statusInfo = labels[status];

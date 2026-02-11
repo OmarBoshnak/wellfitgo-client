@@ -4,8 +4,6 @@
  */
 
 export { default as ProfileHeader } from './ProfileHeader';
-export { default as WeightProgress } from './WeightProgress';
-export { default as PlanSummary } from './PlanSummary';
 export { default as SubscriptionCard } from './SubscriptionCard';
 export { default as PersonalInfo } from './PersonalInfo';
 export { default as NotificationSettings } from './NotificationSettings';

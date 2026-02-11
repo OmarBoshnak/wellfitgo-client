@@ -46,10 +46,14 @@ export function useMealCalendar() {
 
     const [remoteMealHistory, setRemoteMealHistory] = useState<MealHistory | null>(null);
 
-    // Calculate meal history for calendar display
+    // Calculate meal history from local completions (for real-time updates)
     const localMealHistory = useMemo((): MealHistory => {
         const history: MealHistory = {};
         const totalMealsPerDay = meals.length;
+
+        if (totalMealsPerDay === 0) {
+            return history;
+        }
 
         // Group completions by date
         completions.forEach(comp => {
@@ -70,8 +74,24 @@ export function useMealCalendar() {
         return history;
     }, [completions, meals]);
 
-    const mealHistory = useMemo(() => {
-        return remoteMealHistory || localMealHistory;
+    // Merge remote and local history - local takes precedence for real-time updates
+    const mealHistory = useMemo((): MealHistory => {
+        const merged: MealHistory = { ...remoteMealHistory };
+
+        // Merge local completions on top of remote data
+        Object.entries(localMealHistory).forEach(([date, localStatus]) => {
+            if (!merged[date]) {
+                // Date only exists locally
+                merged[date] = localStatus;
+            } else {
+                // Use higher completion count (allows optimistic updates)
+                if (localStatus.completed > merged[date].completed) {
+                    merged[date] = localStatus;
+                }
+            }
+        });
+
+        return merged;
     }, [remoteMealHistory, localMealHistory]);
 
     const mapHistoryResponse = useCallback((items?: DayMealStatus[]): MealHistory => {
@@ -173,6 +193,23 @@ export function useMealCalendar() {
         return canNavigateToNextMonth(currentMonth, currentYear);
     }, [currentMonth, currentYear]);
 
+    // Refresh history from backend
+    const refreshHistory = useCallback(async () => {
+        if (!token) return;
+
+        const startDate = new Date(currentYear, currentMonth, 1);
+        const endDate = new Date(currentYear, currentMonth + 1, 0);
+        const start = toISODateString(startDate);
+        const end = toISODateString(endDate);
+
+        try {
+            const response = await getMealHistory(token, start, end);
+            setRemoteMealHistory(mapHistoryResponse(response?.data));
+        } catch {
+            // Keep existing data on error
+        }
+    }, [token, currentMonth, currentYear, mapHistoryResponse]);
+
     return {
         // State
         currentMonth,
@@ -192,6 +229,7 @@ export function useMealCalendar() {
         goToMonth,
         selectDay,
         getStatusForDate,
+        refreshHistory,
     };
 }
 

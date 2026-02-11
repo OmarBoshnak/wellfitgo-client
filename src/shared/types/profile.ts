@@ -93,9 +93,19 @@ export interface CoachPlan {
 export interface NotificationSettings {
     pushEnabled: boolean;
     mealReminders: boolean;
-    dailySummary: boolean;
-    weeklyReport: boolean;
+    weeklyCheckin: boolean;
     coachMessages: boolean;
+    mealReminderTime?: string;
+    timezone?: string;
+    mealRemindersSchedule?: MealRemindersSchedule;
+}
+
+export interface MealRemindersSchedule {
+    breakfast: { enabled: boolean; time: string };
+    snack1: { enabled: boolean; time: string };
+    lunch: { enabled: boolean; time: string };
+    snack2: { enabled: boolean; time: string };
+    dinner: { enabled: boolean; time: string };
 }
 
 /** App preferences */
@@ -145,6 +155,7 @@ export interface ProfileState {
     subscription: Subscription | null;
     coachPlan: CoachPlan | null;
     settings: ProfileSettings;
+    weightGoalType: 'lose' | 'gain' | 'maintain';
     isLoading: boolean;
     isUpdating: boolean;
     error: string | null;
@@ -174,12 +185,30 @@ export interface ProfileHeaderProps {
     uploadProgress?: number;
 }
 
+/** Goal type for weight management */
+export type WeightGoalType = 'lose' | 'gain' | 'maintain';
+
+/** Health history data from MongoDB */
+export interface HealthHistoryData {
+    height: number; // in cm
+    age: number;
+    gender: 'male' | 'female';
+}
+
 /** WeightProgress component props */
 export interface WeightProgressProps {
     progress: WeightProgress;
     unit?: 'kg' | 'lb';
     onViewHistory?: () => void;
     isRTL?: boolean;
+    /** Health history data for target calculation */
+    healthHistory?: HealthHistoryData;
+    /** Current goal type */
+    goalType?: WeightGoalType;
+    /** Callback when goal type changes */
+    onGoalChange?: (goalType: WeightGoalType, calculatedTarget: number) => void;
+    /** Enable interactive mode */
+    interactive?: boolean;
 }
 
 /** PlanSummary props */
@@ -209,7 +238,7 @@ export interface PersonalInfoProps {
 /** NotificationSettings props */
 export interface NotificationSettingsProps {
     settings: NotificationSettings;
-    onToggle: (key: keyof NotificationSettings, value: boolean) => void;
+    onToggle: (key: NotificationToggleKey, value: boolean) => void;
     isRTL?: boolean;
 }
 
@@ -248,9 +277,17 @@ export interface EditModalsProps {
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
     pushEnabled: true,
     mealReminders: true,
-    dailySummary: true,
-    weeklyReport: false,
+    weeklyCheckin: true,
     coachMessages: true,
+    mealReminderTime: '09:00',
+    timezone: 'UTC',
+    mealRemindersSchedule: {
+        breakfast: { enabled: true, time: '08:00' },
+        snack1: { enabled: false, time: '11:00' },
+        lunch: { enabled: true, time: '13:00' },
+        snack2: { enabled: false, time: '16:00' },
+        dinner: { enabled: true, time: '19:00' },
+    },
 };
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
@@ -276,3 +313,5 @@ export type SettingsUpdate = Partial<ProfileSettings>;
 
 /** Notification settings update */
 export type NotificationSettingsUpdate = Partial<NotificationSettings>;
+
+export type NotificationToggleKey = 'pushEnabled' | 'mealReminders' | 'weeklyCheckin' | 'coachMessages';

@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     Modal,
     Platform,
@@ -12,9 +13,19 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { colors } from '@/src/shared/core/constants/Theme';
 import { isRTL } from '@/src/shared/core/constants/translation';
+import { useAppDispatch } from '@/src/shared/store';
+import { setSubscription as setReduxSubscription } from '@/src/shared/store/slices/profileSlice';
+import {
+    getSubscriptionDetails,
+    pauseSubscriptionApi,
+    resumeSubscriptionApi,
+    cancelSubscriptionApi,
+    getBillingHistory,
+} from '@/src/shared/services/backend/api';
 
 const FEATURES = [
     { en: 'Personalized Nutrition Plan', ar: 'خطة تغذية مخصصة' },
@@ -39,101 +50,156 @@ const COLORS = {
 const ManageSubscriptionScreen = () => {
     const insets = useSafeAreaInsets();
     const router = useRouter();
+    const dispatch = useAppDispatch();
 
-    const [isPaused, setIsPaused] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isActionLoading, setIsActionLoading] = useState(false);
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [subscription, setSubscription] = useState<any>(null);
-    const [billingHistory, setBillingHistory] = useState<any[]>([]);
+    const [billingHistory, setBillingHistoryState] = useState<any[]>([]);
 
-    useEffect(() => {
-        setSubscription({
-            planName: null,
-            price: 'EGP 799',
-            period: null,
-            nextBillingDate: '2024-10-24',
-            autoRenews: true,
-        });
-        setBillingHistory([
-            { id: 'INV-2024-892', date: '2024-07-24', amount: 'EGP 799' },
-            { id: 'INV-2024-432', date: '2024-04-24', amount: 'EGP 799' },
-            { id: 'INV-2024-105', date: '2024-01-24', amount: 'EGP 799' },
-        ]);
+    const fetchData = useCallback(async () => {
+        try {
+            setIsLoading(true);
+            const token = await AsyncStorage.getItem('token');
+            const [subRes, billRes] = await Promise.all([
+                getSubscriptionDetails(token || undefined),
+                getBillingHistory(token || undefined),
+            ]);
+            if (subRes?.success) setSubscription(subRes.data);
+            if (billRes?.success) setBillingHistoryState(billRes.data || []);
+        } catch (e) {
+            Alert.alert(isRTL ? 'خطأ' : 'Error', isRTL ? 'فشل في تحميل بيانات الاشتراك' : 'Failed to load subscription data');
+        } finally {
+            setIsLoading(false);
+        }
     }, []);
 
+    useEffect(() => { fetchData(); }, [fetchData]);
+
+    const syncReduxSubscription = useCallback((sub: any) => {
+        if (!sub) return;
+        dispatch(setReduxSubscription({
+            id: '',
+            planName: sub.planName || '',
+            planNameAr: sub.planNameAr || '',
+            status: sub.status === 'active' ? 'active' : sub.status === 'cancelled' ? 'cancelled' : sub.status === 'paused' ? 'inactive' : 'inactive',
+            startDate: sub.startDate || '',
+            nextBillingDate: sub.endDate || '',
+            endDate: sub.endDate || '',
+            price: sub.price || 0,
+            currency: sub.currency || 'EGP',
+            cancelAtPeriodEnd: sub.status === 'cancelled',
+        }));
+    }, [dispatch]);
+
     const formatDate = (dateString: string) => {
+        if (!dateString) return '—';
         const date = new Date(dateString);
-        return date.toLocaleDateString(isRTL ? 'ar-EG' : 'en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-        });
+        return date.toLocaleDateString(isRTL ? 'ar-EG' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     };
 
-    const handlePauseSubscription = () => {
+    const handlePauseSubscription = useCallback(() => {
         Alert.alert(
             isRTL ? 'تنبيه' : 'Notice',
-            isRTL
-                ? 'يمكنك استخدام خاصية الإيقاف المؤقت مرة واحدة فقط وبحد أقصى شهرين'
-                : 'You can only use the pause feature once and for a maximum of 2 months',
+            isRTL ? 'يمكنك استخدام خاصية الإيقاف المؤقت مرة واحدة فقط وبحد أقصى شهرين' : 'You can only use the pause feature once and for a maximum of 2 months',
             [
                 { text: isRTL ? 'إلغاء' : 'Cancel', style: 'cancel' },
                 {
                     text: isRTL ? 'استمرار' : 'Continue',
-                    onPress: () => {
-                        setIsPaused(true);
-                        Alert.alert(
-                            isRTL ? 'تم' : 'Done',
-                            isRTL ? 'تم إيقاف اشتراكك مؤقتاً' : 'Your subscription has been paused'
-                        );
+                    onPress: async () => {
+                        try {
+                            setIsActionLoading(true);
+                            const token = await AsyncStorage.getItem('token');
+                            const res = await pauseSubscriptionApi(token || undefined);
+                            if (res?.success) {
+                                const updated = { ...subscription, status: 'paused', pauseUsed: true, pausedAt: res.data?.pausedAt };
+                                setSubscription(updated);
+                                syncReduxSubscription(updated);
+                                Alert.alert(isRTL ? 'تم' : 'Done', res.message || (isRTL ? 'تم إيقاف اشتراكك مؤقتاً' : 'Subscription paused'));
+                            } else {
+                                Alert.alert(isRTL ? 'خطأ' : 'Error', res?.message || (isRTL ? 'فشل في إيقاف الاشتراك' : 'Failed to pause'));
+                            }
+                        } catch (e) {
+                            Alert.alert(isRTL ? 'خطأ' : 'Error', (e as Error).message);
+                        } finally {
+                            setIsActionLoading(false);
+                        }
                     },
                 },
             ]
         );
-    };
+    }, [subscription, syncReduxSubscription]);
 
-    const handleResumeSubscription = () => {
+    const handleResumeSubscription = useCallback(() => {
         Alert.alert(
             isRTL ? 'استئناف الاشتراك' : 'Resume Subscription',
-            isRTL
-                ? 'هل أنت متأكد أنك تريد استئناف اشتراكك؟'
-                : 'Are you sure you want to resume your subscription?',
+            isRTL ? 'هل أنت متأكد أنك تريد استئناف اشتراكك؟' : 'Are you sure you want to resume your subscription?',
             [
                 { text: isRTL ? 'إلغاء' : 'Cancel', style: 'cancel' },
                 {
                     text: isRTL ? 'استئناف' : 'Resume',
-                    onPress: () => {
-                        setIsPaused(false);
-                        Alert.alert(
-                            isRTL ? 'تم' : 'Done',
-                            isRTL ? 'تم استئناف اشتراكك' : 'Your subscription has been resumed'
-                        );
+                    onPress: async () => {
+                        try {
+                            setIsActionLoading(true);
+                            const token = await AsyncStorage.getItem('token');
+                            const res = await resumeSubscriptionApi(token || undefined);
+                            if (res?.success) {
+                                const updated = { ...subscription, status: 'active', pausedAt: null, endDate: res.data?.endDate, nextBillingDate: res.data?.endDate };
+                                setSubscription(updated);
+                                syncReduxSubscription(updated);
+                                Alert.alert(isRTL ? 'تم' : 'Done', res.message || (isRTL ? 'تم استئناف اشتراكك' : 'Subscription resumed'));
+                            } else {
+                                Alert.alert(isRTL ? 'خطأ' : 'Error', res?.message || (isRTL ? 'فشل في استئناف الاشتراك' : 'Failed to resume'));
+                            }
+                        } catch (e) {
+                            Alert.alert(isRTL ? 'خطأ' : 'Error', (e as Error).message);
+                        } finally {
+                            setIsActionLoading(false);
+                        }
                     },
                 },
             ]
         );
-    };
+    }, [subscription, syncReduxSubscription]);
 
-    const handleCancelSubscription = () => {
-        setShowCancelModal(true);
-    };
+    const handleCancelSubscription = () => setShowCancelModal(true);
 
-    const confirmCancelSubscription = () => {
+    const confirmCancelSubscription = useCallback(async () => {
         setShowCancelModal(false);
-        Alert.alert(isRTL ? 'تم' : 'Done', isRTL ? 'تم إلغاء اشتراكك' : 'Your subscription has been cancelled');
-    };
+        try {
+            setIsActionLoading(true);
+            const token = await AsyncStorage.getItem('token');
+            const res = await cancelSubscriptionApi(token || undefined);
+            if (res?.success) {
+                const updated = { ...subscription, status: 'cancelled' };
+                setSubscription(updated);
+                syncReduxSubscription(updated);
+                Alert.alert(isRTL ? 'تم' : 'Done', res.message || (isRTL ? 'تم إلغاء اشتراكك' : 'Subscription cancelled'));
+            } else {
+                Alert.alert(isRTL ? 'خطأ' : 'Error', res?.message || (isRTL ? 'فشل في إلغاء الاشتراك' : 'Failed to cancel'));
+            }
+        } catch (e) {
+            Alert.alert(isRTL ? 'خطأ' : 'Error', (e as Error).message);
+        } finally {
+            setIsActionLoading(false);
+        }
+    }, [subscription, syncReduxSubscription]);
 
-    const handleDownloadInvoice = (invoiceId: string) => {
-        Alert.alert(isRTL ? 'تحميل' : 'Download', `Invoice ${invoiceId}`);
-    };
+    const isPaused = subscription?.status === 'paused';
+    const isCancelled = subscription?.status === 'cancelled';
+    const isActive = subscription?.status === 'active';
+    const pauseUsed = subscription?.pauseUsed === true;
 
     const planName = useMemo(
-        () => subscription?.planName || (isRTL ? 'الخطة التجريبية' : 'Trial Plan'),
+        () => subscription?.planNameAr || subscription?.planName || (isRTL ? 'لا يوجد اشتراك' : 'No Subscription'),
         [subscription]
     );
-    const planPrice = subscription?.price || 'EGP 799';
-    const planPeriod = subscription?.period || (isRTL ? '3 أشهر' : '3 months');
-    const nextBillingDate = subscription?.nextBillingDate || '2024-10-24';
-    const autoRenews = subscription?.autoRenews !== false;
+    const planPrice = subscription ? `${subscription.currency || 'EGP'} ${subscription.price || 0}` : '—';
+    const planPeriod = subscription?.period || '';
+    const nextBillingDate = subscription?.nextBillingDate || '';
+    const canPause = isActive && !pauseUsed;
+    const canActOnSub = isActive || isPaused;
 
     return (
         <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -151,6 +217,11 @@ const ManageSubscriptionScreen = () => {
                 </TouchableOpacity>
             </View>
 
+            {isLoading ? (
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={COLORS.primaryBlue} />
+                </View>
+            ) : (
             <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
                 <View style={styles.card}>
                     <View style={styles.planHeader}>
@@ -162,25 +233,19 @@ const ManageSubscriptionScreen = () => {
 
                     <View style={styles.planDetails}>
                         <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>
-                                {isRTL ? 'تاريخ الفوترة التالي' : 'Next Billing Date'}
-                            </Text>
                             <Text style={styles.detailValue}>{formatDate(nextBillingDate)}</Text>
+                            <Text style={styles.detailLabel}>
+                                {isRTL ? 'تاريخ انتهاء الاشتراك' : 'Subscription End Date'}
+                            </Text>
                         </View>
                         <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>{isRTL ? 'الحالة' : 'Status'}</Text>
-                            <View style={styles.statusBadge}>
-                                <MaterialIcons name="autorenew" size={16} color={COLORS.success} />
-                                <Text style={styles.statusText}>
-                                    {autoRenews
-                                        ? isRTL
-                                            ? 'تجديد تلقائي'
-                                            : 'Auto-renews'
-                                        : isRTL
-                                            ? 'لا يتجدد'
-                                            : 'No auto-renew'}
+                            <View style={[styles.statusBadge, isCancelled && { backgroundColor: `${COLORS.error}22` }]}>
+                                <MaterialIcons name={isPaused ? 'pause' : isCancelled ? 'cancel' : 'autorenew'} size={16} color={isCancelled ? COLORS.error : isPaused ? COLORS.textSecondary : COLORS.success} />
+                                <Text style={[styles.statusText, isCancelled && { color: COLORS.error }, isPaused && { color: COLORS.textSecondary }]}>
+                                    {isPaused ? (isRTL ? 'متوقف مؤقتاً' : 'Paused') : isCancelled ? (isRTL ? 'ملغى' : 'Cancelled') : isActive ? (isRTL ? 'نشط' : 'Active') : (isRTL ? 'غير نشط' : 'Inactive')}
                                 </Text>
                             </View>
+                            <Text style={styles.detailLabel}>{isRTL ? 'الحالة' : 'Status'}</Text>
                         </View>
                     </View>
 
@@ -192,107 +257,125 @@ const ManageSubscriptionScreen = () => {
                         </Text>
                         {FEATURES.map((feature, index) => (
                             <View key={`${feature.en}-${index}`} style={styles.featureRow}>
-                                <MaterialIcons name="check-circle" size={20} color={COLORS.success} />
                                 <Text style={styles.featureText}>
                                     {isRTL ? feature.ar : feature.en}
                                 </Text>
+                                 <MaterialIcons name="check-circle" size={20} color={COLORS.success} />
                             </View>
                         ))}
                     </View>
                 </View>
+
+                <TouchableOpacity
+                    style={styles.upgradeButton}
+                    onPress={() => router.push({ pathname: '/(auth)/subscription', params: { mode: 'upgrade' } } as never)}
+                >
+                    <MaterialIcons name="upgrade" size={20} color="#FFFFFF" />
+                    <Text style={styles.upgradeButtonText}>
+                        {isCancelled || subscription?.status === 'none'
+                            ? (isRTL ? 'تجديد الاشتراك' : 'Renew Subscription')
+                            : (isRTL ? 'ترقية / تغيير الخطة' : 'Upgrade / Change Plan')}
+                    </Text>
+                </TouchableOpacity>
 
                 <View style={styles.card}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>
-                            {isRTL ? 'سجل الفوترة' : 'Billing History'}
+                            {isRTL ? 'سجل الاشتراكات' : 'Billing History'}
                         </Text>
                     </View>
                     <View style={styles.billingList}>
-                        {(billingHistory.length > 0
-                            ? billingHistory
-                            : [
-                                { id: 'INV-2024-892', date: '2024-07-24', amount: 'EGP 799' },
-                                { id: 'INV-2024-432', date: '2024-04-24', amount: 'EGP 799' },
-                                { id: 'INV-2024-105', date: '2024-01-24', amount: 'EGP 799' },
-                            ]
-                        ).map((invoice: any, index: number) => (
+                        {billingHistory.length === 0 ? (
+                            <Text style={styles.emptyText}>
+                                {isRTL ? 'لا توجد مدفوعات سابقة' : 'No billing history'}
+                            </Text>
+                        ) : billingHistory.map((invoice: any, index: number) => (
                             <View
                                 key={invoice.id}
                                 style={[styles.billingRow, index > 0 && styles.billingRowBorder]}
                             >
+                                <View style={styles.billingRight}>
+                                    <Text style={styles.billingAmount}>
+                                        {invoice.currency || 'EGP'} {invoice.amount}
+                                    </Text>
+                                    <Text style={styles.billingMethodText}>
+                                        {invoice.paymentMethod === 'wallet' ? (isRTL ? 'محفظة' : 'Wallet') : (isRTL ? 'بطاقة' : 'Card')}
+                                    </Text>
+                                </View>
                                 <View>
                                     <Text style={styles.billingDate}>{formatDate(invoice.date)}</Text>
-                                    <Text style={styles.billingId}>#{invoice.id}</Text>
-                                </View>
-                                <View style={styles.billingRight}>
-                                    <Text style={styles.billingAmount}>{invoice.amount}</Text>
-                                    <TouchableOpacity
-                                        style={styles.downloadButton}
-                                        onPress={() => handleDownloadInvoice(invoice.id)}
-                                    >
-                                        <MaterialIcons
-                                            name="download"
-                                            size={16}
-                                            color={COLORS.primaryBlue}
-                                        />
-                                        <Text style={styles.downloadText}>
-                                            {isRTL ? 'تحميل الفاتورة' : 'Download Invoice'}
-                                        </Text>
-                                    </TouchableOpacity>
+                                    <Text style={styles.billingId}>#{invoice.transactionId || invoice.id.slice(-8)}</Text>
                                 </View>
                             </View>
                         ))}
                     </View>
                 </View>
 
-                <View style={styles.card}>
-                    <Text style={styles.sectionTitle}>{isRTL ? 'الإجراءات' : 'Actions'}</Text>
-                    <View style={styles.actionsContainer}>
-                        {isPaused ?
-                            (
+                {canActOnSub && (
+                    <View style={styles.card}>
+                        <Text style={styles.sectionTitle}>{isRTL ? 'الإجراءات' : 'Actions'}</Text>
+                        <View style={styles.actionsContainer}>
+                            {isPaused ? (
                                 <TouchableOpacity
-                                    style={styles.pauseButton}
+                                    style={[styles.pauseButton, isActionLoading && { opacity: 0.5 }]}
                                     onPress={handleResumeSubscription}
+                                    disabled={isActionLoading}
                                 >
-                                    <MaterialIcons
-                                        name="play-arrow"
-                                        size={20}
-                                        color={COLORS.primaryBlue}
-                                    />
+                                    {isActionLoading ? <ActivityIndicator size="small" color={COLORS.primaryBlue} /> : <MaterialIcons name="play-arrow" size={20} color={COLORS.primaryBlue} />}
                                     <Text style={styles.pauseButtonText}>
                                         {isRTL ? 'استئناف الاشتراك' : 'Resume Subscription'}
                                     </Text>
                                 </TouchableOpacity>
-                            ) : (
+                            ) : canPause ? (
                                 <TouchableOpacity
-                                    style={styles.pauseButton}
+                                    style={[styles.pauseButton, isActionLoading && { opacity: 0.5 }]}
                                     onPress={handlePauseSubscription}
+                                    disabled={isActionLoading}
                                 >
-                                    <MaterialIcons
-                                        name="pause"
-                                        size={20}
-                                        color={COLORS.primaryBlue}
-                                    />
+                                    {isActionLoading ? <ActivityIndicator size="small" color={COLORS.primaryBlue} /> : <MaterialIcons name="pause" size={20} color={COLORS.primaryBlue} />}
                                     <Text style={styles.pauseButtonText}>
                                         {isRTL ? 'إيقاف الاشتراك مؤقتاً' : 'Pause Subscription'}
                                     </Text>
                                 </TouchableOpacity>
-                            )}
+                            ) : pauseUsed && isActive ? (
+                                <View style={[styles.pauseButton, { opacity: 0.4 }]}>
+                                    <MaterialIcons name="pause" size={20} color={COLORS.textSecondary} />
+                                    <Text style={[styles.pauseButtonText, { color: COLORS.textSecondary }]}>
+                                        {isRTL ? 'تم استخدام الإيقاف المؤقت' : 'Pause Already Used'}
+                                    </Text>
+                                </View>
+                            ) : null}
 
-                        <TouchableOpacity style={styles.cancelButton} onPress={handleCancelSubscription}>
-                            <Text style={styles.cancelButtonText}>
-                                {isRTL ? 'إلغاء الاشتراك' : 'Cancel Subscription'}
+                            <TouchableOpacity
+                                style={[styles.cancelButton, isActionLoading && { opacity: 0.5 }]}
+                                onPress={handleCancelSubscription}
+                                disabled={isActionLoading}
+                            >
+                                <Text style={styles.cancelButtonText}>
+                                    {isRTL ? 'إلغاء الاشتراك' : 'Cancel Subscription'}
+                                </Text>
+                            </TouchableOpacity>
+
+                            <Text style={styles.disclaimer}>
+                                {isRTL
+                                    ? 'ستبقى خطتك نشطة حتى نهاية فترة الفوترة الحالية.'
+                                    : 'Your plan will remain active until the end of the current billing cycle.'}
                             </Text>
-                        </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
 
-                        <Text style={styles.disclaimer}>
+                {isCancelled && (
+                    <View style={styles.card}>
+                        <Text style={[styles.disclaimer, { textAlign: 'center' }]}>
                             {isRTL
-                                ? 'ستبقى خطتك نشطة حتى نهاية فترة الفوترة الحالية.'
-                                : 'Your plan will remain active until the end of the current billing cycle.'}
+                                ? `تم إلغاء اشتراكك. ستبقى خطتك نشطة حتى ${formatDate(nextBillingDate)}.`
+                                : `Your subscription has been cancelled. Your plan will remain active until ${formatDate(nextBillingDate)}.`}
                         </Text>
                     </View>
-                </View>
+                )}
             </ScrollView>
+            )}
 
             <Modal
                 visible={showCancelModal}
@@ -397,10 +480,12 @@ const styles = StyleSheet.create({
         fontSize: 20,
         fontWeight: '600',
         color: COLORS.textPrimary,
+        textAlign:'right'
     },
     planPrice: {
         fontSize: 16,
         color: COLORS.textPrimary,
+                textAlign:'right',
     },
     planDetails: {
         marginTop: 16,
@@ -446,6 +531,7 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: COLORS.textPrimary,
         marginBottom: 4,
+        textAlign:'right'
     },
     featureRow: {
         flexDirection: 'row',
@@ -457,6 +543,7 @@ const styles = StyleSheet.create({
         color: COLORS.textPrimary,
         flex: 1,
         paddingTop: 2,
+        textAlign:'right'
     },
     sectionHeader: {
         paddingBottom: 12,
@@ -471,6 +558,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: COLORS.textPrimary,
         marginBottom: 16,
+        textAlign:'right'
     },
     billingList: {
         marginTop: 12,
@@ -487,6 +575,7 @@ const styles = StyleSheet.create({
     billingDate: {
         fontSize: 14,
         color: COLORS.textSecondary,
+        textAlign:'right'
     },
     billingId: {
         fontSize: 12,
@@ -502,15 +591,34 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         color: COLORS.textPrimary,
     },
-    downloadButton: {
+    loadingContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    emptyText: {
+        fontSize: 14,
+        color: COLORS.textSecondary,
+        textAlign: 'center',
+        paddingVertical: 16,
+    },
+    billingMethodText: {
+        fontSize: 12,
+        color: COLORS.textTertiary,
+    },
+    upgradeButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
+        justifyContent: 'center',
+        gap: 8,
+        paddingVertical: 16,
+        borderRadius: 14,
+        backgroundColor: COLORS.primaryBlue,
     },
-    downloadText: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: COLORS.primaryBlue,
+    upgradeButtonText: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: '#FFFFFF',
     },
     actionsContainer: {
         gap: 12,

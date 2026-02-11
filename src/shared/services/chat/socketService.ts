@@ -11,8 +11,10 @@ import {
     deleteMessage as removeMessage,
     setTypingIndicator,
     setConnectionStatus,
-    updateDoctorOnlineStatus,
+    updateDoctorSocketStatus,
     markAllMessagesRead,
+    confirmMessageSent,
+    incrementUnreadCount,
 } from '@/src/shared/store/slices/chatSlice';
 import type { Message } from '@/src/shared/types/chat';
 
@@ -40,6 +42,7 @@ interface ServerMessage {
     isDeleted?: boolean;
     isEdited?: boolean;
     createdAt: string;
+    clientTempId?: string;
 }
 
 // ============================================================================
@@ -48,6 +51,7 @@ interface ServerMessage {
 
 class ChatSocketService {
     private socket: Socket | null = null;
+    private presenceSocket: Socket | null = null;
     private currentUserId: string | null = null;
     private currentConversationId: string | null = null;
     private typingTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -69,6 +73,7 @@ class ChatSocketService {
             isRead: false,
             status: 'delivered',
             createdAt: serverMsg.createdAt,
+            clientTempId: serverMsg.clientTempId,
         };
     }
 
@@ -100,7 +105,28 @@ class ChatSocketService {
             forceNew: true,
         });
 
+        if (this.presenceSocket) {
+            this.presenceSocket.disconnect();
+            this.presenceSocket = null;
+        }
+
+        this.presenceSocket = io(`${SOCKET_URL}`, {
+            path: '/socket.io',
+            auth: {
+                userId,
+                token,
+            },
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: RECONNECTION_ATTEMPTS,
+            reconnectionDelay: RECONNECTION_DELAY,
+            reconnectionDelayMax: 5000,
+            timeout: 20000,
+            forceNew: true,
+        });
+
         this.setupEventListeners();
+        this.setupPresenceListeners();
     }
 
     /**
@@ -150,10 +176,27 @@ class ChatSocketService {
         // Message events (matching backend event names from chat.socket.ts)
         this.socket.on('new_message', (serverMsg: ServerMessage) => {
             console.log('[ChatSocket] New message received:', serverMsg._id);
+
+            // Handle optimistic message reconciliation
+            if (serverMsg.clientTempId && serverMsg.senderId === this.currentUserId) {
+                const state = store.getState();
+                const optimisticMessage = state.chat.messages.find(m => m.tempId === serverMsg.clientTempId);
+                if (optimisticMessage) {
+                    // Replace optimistic message with confirmed message
+                    const confirmedMessage = this.transformMessage(serverMsg);
+                    store.dispatch(confirmMessageSent({
+                        tempId: serverMsg.clientTempId,
+                        message: confirmedMessage,
+                    }));
+                    return;
+                }
+            }
+
             // Don't add own messages (they're already added optimistically)
             if (serverMsg.senderId !== this.currentUserId) {
                 const message = this.transformMessage(serverMsg);
                 store.dispatch(addMessage(message));
+                store.dispatch(incrementUnreadCount());
             }
         });
 
@@ -212,12 +255,58 @@ class ChatSocketService {
         // Presence events
         this.socket.on('user_online', (data: { userId: string }) => {
             console.log('[ChatSocket] User online:', data.userId);
-            store.dispatch(updateDoctorOnlineStatus({ isOnline: true }));
+            const currentDoctorId = store.getState().chat.currentDoctor?.id;
+            if (currentDoctorId === data.userId) {
+                store.dispatch(updateDoctorSocketStatus({ doctorId: data.userId, isOnline: true }));
+            }
         });
 
         this.socket.on('user_offline', (data: { userId: string; lastSeen: string }) => {
             console.log('[ChatSocket] User offline:', data.userId);
-            store.dispatch(updateDoctorOnlineStatus({ isOnline: false, lastSeen: data.lastSeen }));
+            const currentDoctorId = store.getState().chat.currentDoctor?.id;
+            if (currentDoctorId === data.userId) {
+                store.dispatch(updateDoctorSocketStatus({
+                    doctorId: data.userId,
+                    isOnline: false,
+                    lastSeen: data.lastSeen,
+                }));
+            }
+        });
+    }
+
+    private setupPresenceListeners(): void {
+        if (!this.presenceSocket) return;
+
+        this.presenceSocket.on('connect', () => {
+            console.log('[ChatSocket] Connected to root namespace for presence');
+        });
+
+        this.presenceSocket.on('connect_error', (error) => {
+            console.error('[ChatSocket] Presence connection error:', error.message);
+        });
+
+        this.presenceSocket.on('user_status_updated', (data: {
+            userId: string;
+            status: 'online' | 'offline' | string;
+            timestamp: string;
+        }) => {
+            const currentDoctorId = store.getState().chat.currentDoctor?.id;
+            if (currentDoctorId !== data.userId) {
+                return;
+            }
+
+            if (data.status === 'online') {
+                store.dispatch(updateDoctorSocketStatus({ doctorId: data.userId, isOnline: true }));
+                return;
+            }
+
+            if (data.status === 'offline') {
+                store.dispatch(updateDoctorSocketStatus({
+                    doctorId: data.userId,
+                    isOnline: false,
+                    lastSeen: data.timestamp,
+                }));
+            }
         });
     }
 
@@ -228,6 +317,10 @@ class ChatSocketService {
         if (this.socket) {
             this.socket.disconnect();
             this.socket = null;
+        }
+        if (this.presenceSocket) {
+            this.presenceSocket.disconnect();
+            this.presenceSocket = null;
         }
         this.currentUserId = null;
         this.currentConversationId = null;

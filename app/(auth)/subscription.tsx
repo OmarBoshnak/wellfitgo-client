@@ -11,7 +11,7 @@ import {
     Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
@@ -43,6 +43,8 @@ import {
  */
 export default function SubscriptionScreen() {
     const router = useRouter();
+    const { mode } = useLocalSearchParams<{ mode?: string }>();
+    const isUpgrade = mode === 'upgrade';
 
     // State
     const [selectedPlanId, setSelectedPlanId] = useState<string | null>(() => {
@@ -75,19 +77,28 @@ export default function SubscriptionScreen() {
             params: {
                 planId: selectedPlan.id,
                 price: selectedPlan.price.toString(),
+                planName: selectedPlan.nameAr,
             },
         } as never);
     }, [selectedPlanId, selectedPlan, router]);
 
     const handleSkip = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        router.replace('/(app)/(tabs)' as never);
-    }, [router]);
+        if (isUpgrade) {
+            router.back();
+        } else {
+            router.replace('/(app)/(tabs)' as never);
+        }
+    }, [router, isUpgrade]);
 
     const handleClose = useCallback(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        router.replace('/(app)/(tabs)' as never);
-    }, [router]);
+        if (isUpgrade) {
+            router.back();
+        } else {
+            router.replace('/(app)/(tabs)' as never);
+        }
+    }, [router, isUpgrade]);
 
     const handleTermsPress = useCallback(() => {
         // TODO: Navigate to terms page or open URL
@@ -100,13 +111,13 @@ export default function SubscriptionScreen() {
     }, []);
 
     return (
-        <SafeAreaView style={styles.container} edges={['top']}>
+        <SafeAreaView style={styles.container} edges={['left','right']}>
             {/* Header */}
             <Animated.View entering={FadeIn.duration(300)}>
                 <SubscriptionHeader
                     onClose={handleClose}
-                    title="اختر خطتك"
-                    subtitle="ابدأ رحلتك نحو حياة صحية أفضل"
+                    title={isUpgrade ? 'تغيير خطتك' : 'اختر خطتك'}
+                    subtitle={isUpgrade ? 'اختر خطة جديدة لاشتراكك' : 'ابدأ رحلتك نحو حياة صحية أفضل'}
                 />
             </Animated.View>
 
@@ -147,12 +158,13 @@ export default function SubscriptionScreen() {
             <Animated.View entering={FadeIn.delay(300).duration(300)}>
                 <SubscriptionFooter
                     onContinue={handleContinue}
-                    onSkip={handleSkip}
+                    onSkip={isUpgrade ? undefined : handleSkip}
                     onTermsPress={handleTermsPress}
                     onPrivacyPress={handlePrivacyPress}
                     isLoading={isProcessing}
                     disabled={!selectedPlanId}
                     selectedPlan={selectedPlan}
+                    mode={isUpgrade ? 'upgrade' : 'new'}
                 />
             </Animated.View>
         </SafeAreaView>

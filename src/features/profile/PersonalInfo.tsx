@@ -30,15 +30,17 @@ interface InfoRowProps {
     iconColor: string;
     label: string;
     value: string;
-    onEdit: () => void;
+    onEdit?: () => void;
 }
 
 function InfoRow({ icon, iconColor, label, value, onEdit }: InfoRowProps) {
     const t = profileTranslations;
 
     const handlePress = () => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        onEdit();
+        if (onEdit) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onEdit();
+        }
     };
 
     return (
@@ -56,15 +58,17 @@ function InfoRow({ icon, iconColor, label, value, onEdit }: InfoRowProps) {
                     <Text style={styles.infoValue}>{value}</Text>
                 </View>
             </View>
-            <Pressable
-                onPress={handlePress}
-                style={styles.editButton}
-                accessibilityRole="button"
-                accessibilityLabel={`${t.edit} ${label}`}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-                <Text style={styles.editText}>{t.edit}</Text>
-            </Pressable>
+            {onEdit && (
+                <Pressable
+                    onPress={handlePress}
+                    style={styles.editButton}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t.edit} ${label}`}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                    <Text style={styles.editText}>{t.edit}</Text>
+                </Pressable>
+            )}
         </View>
     );
 }
@@ -80,6 +84,8 @@ function PersonalInfo({
     const genderValue = profile.gender === 'male' ? t.male : t.female;
     const ageValue = `${profile.age} ${t.years}`;
     const heightValue = `${profile.height} سم`;
+    const weightUnit = isRTL ? 'كجم' : 'kg';
+    const startWeightValue = `${profile.startWeight} ${weightUnit}`;
 
     return (
         <Animated.View
@@ -115,6 +121,15 @@ function PersonalInfo({
                     label={t.height}
                     value={heightValue}
                     onEdit={onEditHeight}
+                />
+
+                <View style={styles.divider} />
+
+                <InfoRow
+                    icon="fitness"
+                    iconColor="#EC4899"
+                    label={t.startWeight}
+                    value={startWeightValue}
                 />
             </View>
         </Animated.View>

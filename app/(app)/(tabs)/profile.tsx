@@ -4,36 +4,31 @@
  */
 
 import React, { useCallback, useState } from 'react';
-import { StyleSheet, RefreshControl, Alert, ActionSheetIOS, Platform } from 'react-native';
+import { ActionSheetIOS, Alert, Platform, RefreshControl, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { colors } from '@/src/shared/core/constants/Theme';
-import { isRTL, profileTranslations } from '@/src/shared/core/constants/translation';
+import { profileTranslations } from '@/src/shared/core/constants/translation';
 import { EditModalType } from '@/src/shared/types/profile';
 
 // Hooks
-import {
-    useProfile,
-    useSubscription,
-    useSettings,
-    useAvatarUpload,
-    useProfileActions,
-} from '@/src/hooks/profile';
+import { useAvatarUpload, useProfile, useProfileActions, useSettings, useSubscription, } from '@/src/hooks/profile';
+
 
 // Components
 import {
-    ProfileHeader,
-    WeightProgress,
-    PlanSummary,
-    SubscriptionCard,
-    PersonalInfo,
-    NotificationSettings,
-    SupportOptions,
-    ProfileActions,
     EditModals,
+    NotificationSettings,
+    PersonalInfo,
+
+    ProfileActions,
+    ProfileHeader,
     ProfileLoadingSkeleton,
+    SubscriptionCard,
+    SupportOptions,
+
 } from '@/src/features/profile';
 
 /**
@@ -49,7 +44,6 @@ export default function ProfileScreen() {
     const {
         profile,
         coachPlan,
-        weightProgress,
         isLoading,
         error,
         refresh,
@@ -76,6 +70,7 @@ export default function ProfileScreen() {
 
     const {
         isLoggingOut,
+        isDeletingAccount,
         handleLogout,
         handleDeleteAccount,
     } = useProfileActions();
@@ -138,6 +133,8 @@ export default function ProfileScreen() {
         // Navigate to weight history screen (future)
         Alert.alert('سجل الوزن', 'سيتم إضافة شاشة سجل الوزن قريباً');
     }, []);
+
+
 
     const handleMessageCoach = useCallback(() => {
         router.push('/(app)/(tabs)/chat');
@@ -218,20 +215,7 @@ export default function ProfileScreen() {
                     uploadProgress={uploadProgress}
                 />
 
-                {/* Weight Progress */}
-                {weightProgress && (
-                    <WeightProgress
-                        progress={weightProgress}
-                        onViewHistory={handleViewWeightHistory}
-                    />
-                )}
 
-                {/* Plan Summary */}
-                <PlanSummary
-                    plan={coachPlan}
-                    onMessageCoach={handleMessageCoach}
-                    onViewPlan={handleViewPlan}
-                />
 
                 {/* Subscription Card */}
                 <SubscriptionCard
@@ -265,6 +249,7 @@ export default function ProfileScreen() {
                     onLogout={handleLogout}
                     onDeleteAccount={handleDeleteAccount}
                     isLoggingOut={isLoggingOut}
+                    isDeletingAccount={isDeletingAccount}
                 />
             </Animated.ScrollView>
 

@@ -32,6 +32,7 @@ import {
     ChangeRequestModal,
     MealsLoadingSkeleton,
     MealsErrorBoundary,
+    NoPlanEmptyState,
 } from '@/src/features/meals';
 import AnimatedProgressRing from '@/src/shared/components/shared/AnimatedProgressRing';
 import { getOrCreateConversation, sendChatMessage } from '@/src/shared/services/backend/api';
@@ -46,6 +47,7 @@ import {
     setShowChangeRequestModal,
     setActiveMeal,
     selectMealOption,
+    selectMealsInProgressMeals,
 } from '@/src/shared/store/slices/mealsSlice';
 import { selectToken } from '@/src/shared/store/selectors/auth.selectors';
 
@@ -87,6 +89,7 @@ export default function MealsScreen() {
         refresh: refreshPlan,
         format,
         summary,
+        noPlanAssigned,
     } = useMealPlan();
 
     const {
@@ -145,11 +148,16 @@ export default function MealsScreen() {
     ]);
 
     const completionProgress = useMemo(() => {
+        // Prioritize daily progress for the ring interaction
+        if (progress.total > 0) {
+            return progress.completed / progress.total;
+        }
+
         if (!resolvedTotalMeals) {
             return 0;
         }
         return resolvedCompletedMeals / resolvedTotalMeals;
-    }, [resolvedCompletedMeals, resolvedTotalMeals]);
+    }, [progress.completed, progress.total, resolvedCompletedMeals, resolvedTotalMeals]);
 
     // Selectors
     const showChangeRequestModal = useAppSelector(selectShowChangeRequestModal);
@@ -157,6 +165,10 @@ export default function MealsScreen() {
     const activeMeal = useAppSelector(selectActiveMeal);
     const selections = useAppSelector(selectSelections);
     const token = useAppSelector(selectToken);
+
+    // Use selector for in-progress meals
+    const inProgressMeals = useAppSelector(selectMealsInProgressMeals);
+    const getMealInProgress = useCallback((mealId: string) => (inProgressMeals as Record<string, boolean>)[mealId] || false, [inProgressMeals]);
 
     // Handlers
     const handleRefresh = useCallback(async () => {
@@ -280,6 +292,53 @@ export default function MealsScreen() {
         );
     }
 
+    // No plan assigned by doctor
+    if (noPlanAssigned && !isLoading) {
+        return (
+            <GestureHandlerRootView style={styles.flex}>
+                <View style={styles.container}>
+                    <Animated.ScrollView
+                        entering={FadeIn.duration(300)}
+                        style={styles.scrollView}
+                        contentContainerStyle={styles.scrollContent}
+                        showsVerticalScrollIndicator={false}
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={refreshing}
+                                onRefresh={handleRefresh}
+                                tintColor={colors.primaryDark}
+                                colors={[colors.primaryDark]}
+                            />
+                        }
+                    >
+                        <MealsHeader
+                            title="الوجبات"
+                            onHelpPress={handleHelpPress}
+                        />
+                        <NoPlanEmptyState
+                            onContactDoctor={() => {
+                                const doctorId = summary?.doctor?.id;
+                                if (doctorId && token) {
+                                    getOrCreateConversation(doctorId, token)
+                                        .then((conv) => {
+                                            if (conv?.data?.id) {
+                                                Alert.alert('تواصل', 'يمكنك التواصل مع طبيبك عبر المحادثات');
+                                            }
+                                        })
+                                        .catch(() => {
+                                            Alert.alert('تنبيه', 'تعذر فتح المحادثة');
+                                        });
+                                } else {
+                                    Alert.alert('تنبيه', 'لا يوجد طبيب معين حالياً');
+                                }
+                            }}
+                        />
+                    </Animated.ScrollView>
+                </View>
+            </GestureHandlerRootView>
+        );
+    }
+
     return (
         <GestureHandlerRootView style={styles.flex}>
             <View style={styles.container}>
@@ -362,6 +421,7 @@ export default function MealsScreen() {
                             onChangeMeal={handleChangeMeal}
                             onRequestChange={handleRequestChange}
                             isLoading={isLoading}
+                            isMealInProgress={getMealInProgress}
                         />
                     </MealsErrorBoundary>
                 </Animated.ScrollView>

@@ -4,20 +4,21 @@
  */
 
 import React, { memo, useCallback } from 'react';
-import { View, Text, StyleSheet, Switch, Platform } from 'react-native';
+import { View, Text, StyleSheet, Switch, Platform, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { useRouter } from 'expo-router';
 
 import { colors, shadows } from '@/src/shared/core/constants/Theme';
 import { horizontalScale, verticalScale, ScaleFontSize } from '@/src/shared/core/utils/scaling';
 import { profileTranslations, isRTL } from '@/src/shared/core/constants/translation';
-import { NotificationSettings as NotificationSettingsType } from '@/src/shared/types/profile';
+import { NotificationSettings as NotificationSettingsType, NotificationToggleKey } from '@/src/shared/types/profile';
 
 interface NotificationSettingsProps {
     /** Current settings */
     settings: NotificationSettingsType;
     /** Toggle handler */
-    onToggle: (key: keyof NotificationSettingsType, value: boolean) => void;
+    onToggle: (key: NotificationToggleKey, value: boolean) => void;
 }
 
 interface ToggleRowProps {
@@ -27,6 +28,7 @@ interface ToggleRowProps {
     description?: string;
     value: boolean;
     onValueChange: (value: boolean) => void;
+    rightExtra?: React.ReactNode;
 }
 
 function ToggleRow({
@@ -36,6 +38,7 @@ function ToggleRow({
     description,
     value,
     onValueChange,
+    rightExtra,
 }: ToggleRowProps) {
     return (
         <View
@@ -59,17 +62,20 @@ function ToggleRow({
                     )}
                 </View>
             </View>
-            <Switch
-                value={value}
-                onValueChange={onValueChange}
-                trackColor={{
-                    false: colors.secondary,
-                    true: colors.primaryDark + '40',
-                }}
-                thumbColor={value ? colors.primaryDark : colors.gray}
-                ios_backgroundColor={colors.secondary}
-                style={{ transform: [{ scaleX: -1 }] }}
-            />
+            <View style={styles.toggleRight}>
+                {rightExtra}
+                <Switch
+                    value={value}
+                    onValueChange={onValueChange}
+                    trackColor={{
+                        false: colors.secondary,
+                        true: colors.primaryDark + '40',
+                    }}
+                    thumbColor={value ? colors.primaryDark : colors.gray}
+                    ios_backgroundColor={colors.secondary}
+                    style={{ transform: [{ scaleX: -1 }] }}
+                />
+            </View>
         </View>
     );
 }
@@ -79,9 +85,10 @@ function NotificationSettings({
     onToggle,
 }: NotificationSettingsProps) {
     const t = profileTranslations;
+    const router = useRouter();
 
     const handleToggle = useCallback(
-        (key: keyof NotificationSettingsType) => (value: boolean) => {
+        (key: NotificationToggleKey) => (value: boolean) => {
             onToggle(key, value);
         },
         [onToggle]
@@ -109,32 +116,43 @@ function NotificationSettings({
                     icon="restaurant"
                     iconColor="#F59E0B"
                     label={t.mealReminders}
-                    description="تذكير قبل كل وجبة بـ 15 دقيقة"
+                    description={isRTL ? 'فطور، غداء، عشاء' : 'Breakfast, Lunch, Dinner'}
                     value={settings.mealReminders}
                     onValueChange={handleToggle('mealReminders')}
+                    rightExtra={
+                        <TouchableOpacity
+                            onPress={() => router.push('/meal-reminders' as never)}
+                            activeOpacity={0.7}
+                            style={styles.timeButton}
+                        >
+                            <Text style={styles.timeButtonText}>
+                                {settings.mealReminderTime ?? '09:00'}
+                            </Text>
+                        </TouchableOpacity>
+                    }
                 />
 
                 <View style={styles.divider} />
 
-                <ToggleRow
-                    icon="sunny"
-                    iconColor="#10B981"
-                    label={t.dailySummary}
-                    description="ملخص يومي في نهاية اليوم"
-                    value={settings.dailySummary}
-                    onValueChange={handleToggle('dailySummary')}
-                />
+                <TouchableOpacity
+                    style={styles.toggleRow}
+                    onPress={() => router.push('/weekly-checkin' as never)}
+                >
+                    <View style={styles.toggleLeft}>
+                        <View style={[styles.iconContainer, { backgroundColor: '#8B5CF620' }]}>
+                            <Ionicons name="bar-chart" size={horizontalScale(18)} color="#8B5CF6" />
+                        </View>
+                        <Text style={styles.toggleLabel}>
+                            {isRTL ? 'معاد الوزن الأسبوعي' : 'Weekly Weight Check-In'}
+                        </Text>
+                    </View>
 
-                <View style={styles.divider} />
-
-                <ToggleRow
-                    icon="bar-chart"
-                    iconColor="#8B5CF6"
-                    label={t.weeklyReport}
-                    description="تقرير أسبوعي عن تقدمك"
-                    value={settings.weeklyReport}
-                    onValueChange={handleToggle('weeklyReport')}
-                />
+                    <Ionicons
+                        name={isRTL ? 'chevron-back' : 'chevron-forward'}
+                        size={18}
+                        color={colors.textSecondary}
+                    />
+                </TouchableOpacity>
 
                 <View style={styles.divider} />
 
@@ -210,6 +228,24 @@ const styles = StyleSheet.create({
     divider: {
         height: 1,
         backgroundColor: colors.border,
+    },
+    toggleRight: {
+        flexDirection: isRTL ? 'row-reverse' : 'row',
+        alignItems: 'center',
+        gap: horizontalScale(8),
+    },
+    timeButton: {
+        paddingHorizontal: horizontalScale(10),
+        paddingVertical: verticalScale(6),
+        borderRadius: horizontalScale(10),
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.white,
+    },
+    timeButtonText: {
+        fontSize: ScaleFontSize(13),
+        fontWeight: '700',
+        color: colors.textPrimary,
     },
 });
 

@@ -135,33 +135,12 @@ function SupportOptions({
                 <View style={styles.divider} />
 
                 <SupportRow
-                    icon="logo-whatsapp"
-                    iconColor="#25D366"
-                    iconBgColor="#25D36615"
-                    label={t.contactWhatsApp}
-                    description="رد سريع خلال ساعة"
-                    onPress={handleWhatsApp}
-                />
-
-                <View style={styles.divider} />
-
-                <SupportRow
                     icon="mail"
                     iconColor="#EA4335"
                     iconBgColor="#EA433515"
                     label={t.contactEmail}
                     description="support@wellfitgo.com"
                     onPress={handleEmail}
-                />
-
-                <View style={styles.divider} />
-
-                <SupportRow
-                    icon="document-text"
-                    iconColor="#8B5CF6"
-                    iconBgColor="#8B5CF615"
-                    label={t.faq}
-                    onPress={onHelpCenter}
                 />
 
                 <View style={styles.divider} />

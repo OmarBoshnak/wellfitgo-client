@@ -15,13 +15,21 @@ import {
     selectMealPlan,
     selectMealsForSelectedDate,
     selectCompletionProgress,
+    selectMealsIsMealInProgress,
     setCompletions,
     setSelections,
     toggleMealCompletion,
+    setMealInProgress,
+    clearDailyState,
 } from '@/src/shared/store/slices/mealsSlice';
 import { toISODateString } from '@/src/shared/utils/dateTime/mealCalendarHelpers';
 import { getMealCompletions, upsertMealCompletion } from '@/src/shared/services/backend/api';
 import { selectToken } from '@/src/shared/store/selectors/auth.selectors';
+
+// Helper function to get today's date string
+const getTodayDateString = (): string => {
+    return new Date().toISOString().split('T')[0];
+};
 
 /**
  * Hook for managing meal completions with haptics
@@ -49,6 +57,25 @@ export function useMealCompletions() {
         return selectedDate;
     }, [selectedDate, dayOffset, plan?.format]);
 
+    // Check if we need to clear state due to date change
+    const todayDate = getTodayDateString();
+    const isDifferentDay = currentDate !== todayDate;
+
+    // Auto-clear state when date changes (daily reset logic)
+    useEffect(() => {
+        if (isDifferentDay && (completions.length > 0 || Object.keys(selections).length > 0)) {
+            console.log('🔄 [DAILY RESET] Date changed, clearing meal state:', {
+                currentDate,
+                todayDate,
+                completionsCount: completions.length,
+                selectionsCount: Object.keys(selections).length
+            });
+            
+            // Clear the state for the new day
+            dispatch(clearDailyState());
+        }
+    }, [currentDate, todayDate, isDifferentDay, completions.length, Object.keys(selections).length, dispatch]);
+
     // Check if a specific meal is completed
     const isMealCompleted = useCallback((mealId: string): boolean => {
         return completions.some(c => c.mealId === mealId && c.date === currentDate);
@@ -60,18 +87,41 @@ export function useMealCompletions() {
     }, [completions, currentDate]);
 
     useEffect(() => {
+        console.log('🍽️ [DEBUG] Meal completions effect triggered:', { token, currentDate });
+
         if (!token) {
+            console.log('🍽️ [DEBUG] No token - skipping meal completions load');
             return;
         }
 
+        // Verify token format (basic check)
+        if (token.length < 10) {
+            console.error('🍽️ [DEBUG] Token seems too short:', token.length);
+        }
+
+        console.log('🍽️ [DEBUG] Token verification:', {
+            exists: !!token,
+            length: token.length,
+            startsWithBearer: token.startsWith('Bearer '),
+            firstChars: token.substring(0, 20) + '...',
+            lastChars: '...' + token.substring(token.length - 20)
+        });
+
         let isActive = true;
+
+        console.log('🍽️ [DEBUG] Loading meal completions for date:', currentDate);
 
         getMealCompletions(token, currentDate)
             .then((response) => {
+                console.log('🍽️ [DEBUG] Meal completions response:', response);
+
                 if (!isActive) return;
                 const completionItems = Array.isArray(response?.data?.completions)
                     ? response?.data?.completions
                     : [];
+
+                console.log('🍽️ [DEBUG] Completion items found:', completionItems.length);
+
                 const normalizedCompletions = completionItems
                     .filter((item) => item?.mealId && item?.date && typeof item?.completedAt === 'number')
                     .map((item) => ({
@@ -82,14 +132,22 @@ export function useMealCompletions() {
                         selectedOptions: item?.selectedOptions,
                     }));
 
+                console.log('🍽️ [DEBUG] Normalized completions:', normalizedCompletions);
                 dispatch(setCompletions(normalizedCompletions));
 
                 const selectionsMap = response?.data?.selections;
+                console.log('🍽️ [DEBUG] Selections map:', selectionsMap);
+
                 if (selectionsMap && typeof selectionsMap === 'object') {
                     dispatch(setSelections(selectionsMap));
                 }
             })
-            .catch(() => {
+            .catch((error) => {
+                console.error('🍽️ [DEBUG] Failed to load meal completions:', error);
+                console.error('🍽️ [DEBUG] Error details:', {
+                    message: error instanceof Error ? error.message : 'Unknown error',
+                    stack: error instanceof Error ? error.stack : undefined
+                });
                 if (!isActive) return;
             });
 
@@ -100,7 +158,14 @@ export function useMealCompletions() {
 
     // Toggle meal completion with haptic feedback
     const toggleCompletion = useCallback(async (mealId: string) => {
+        console.log('🍽️ [DEBUG] Toggle completion started:', { mealId, currentDate });
+
         const isCurrentlyCompleted = isMealCompleted(mealId);
+        console.log('🍽️ [DEBUG] Current completion status:', { mealId, isCompleted: isCurrentlyCompleted });
+
+        // Set progress state
+        dispatch(setMealInProgress({ mealId, inProgress: true }));
+
         // Trigger haptic feedback
         if (Platform.OS !== 'web') {
             try {
@@ -115,17 +180,34 @@ export function useMealCompletions() {
         }
 
         // Optimistic update
+        console.log('🍽️ [DEBUG] Making optimistic update...');
         dispatch(toggleMealCompletion({ mealId, date: currentDate }));
 
         if (!token) {
+            console.error('🍽️ [DEBUG] No token available - aborting API call');
+            // Clear progress state if no token
+            dispatch(setMealInProgress({ mealId, inProgress: false }));
             return;
         }
+
+        console.log('🍽️ [DEBUG] Token available, proceeding with API call');
 
         const meal = mealsForDate.find(m => m.id === mealId);
         const completed = !isCurrentlyCompleted;
 
+        console.log('🍽️ [DEBUG] API call parameters:', {
+            mealId,
+            date: currentDate,
+            mealType: meal?.type,
+            completed,
+            mealName: meal?.nameAr || meal?.name,
+            hasSelections: !!selections[mealId],
+            selections: selections[mealId]
+        });
+
         try {
-            await upsertMealCompletion({
+            console.log('🍽️ [DEBUG] Calling upsertMealCompletion API...');
+            const response = await upsertMealCompletion({
                 mealId,
                 date: currentDate,
                 mealType: meal?.type,
@@ -133,8 +215,27 @@ export function useMealCompletions() {
                 completedAt: completed ? Date.now() : undefined,
                 selectedOptions: selections[mealId],
             }, token);
-        } catch {
+
+            console.log('🍽️ [DEBUG] API response:', response);
+
+            if (!response.success) {
+                console.error('🍽️ [DEBUG] API returned error:', response.message);
+                // Revert optimistic update on error
+                dispatch(toggleMealCompletion({ mealId, date: currentDate }));
+            } else {
+                console.log('🍽️ [DEBUG] API call successful - completion saved');
+            }
+        } catch (error) {
+            console.error('🍽️ [DEBUG] API call failed:', error);
+            console.error('🍽️ [DEBUG] Error details:', {
+                message: error instanceof Error ? error.message : 'Unknown error',
+                stack: error instanceof Error ? error.stack : undefined
+            });
+            // Revert optimistic update on error
             dispatch(toggleMealCompletion({ mealId, date: currentDate }));
+        } finally {
+            // Clear progress state
+            dispatch(setMealInProgress({ mealId, inProgress: false }));
         }
     }, [dispatch, currentDate, isMealCompleted, token, mealsForDate, selections]);
 
@@ -193,6 +294,7 @@ export function useMealCompletions() {
         getCompletion,
         toggleCompletion,
         completeAll,
+        isMealInProgress: selectMealsIsMealInProgress,
     };
 }
 

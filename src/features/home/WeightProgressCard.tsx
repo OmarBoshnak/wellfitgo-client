@@ -106,6 +106,7 @@ function WeightProgressCard({
         >
             <Pressable
                 onPress={handlePress}
+                disabled
                 onPressIn={handlePressIn}
                 onPressOut={handlePressOut}
                 accessibilityRole="button"

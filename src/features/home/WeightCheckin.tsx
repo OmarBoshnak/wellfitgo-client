@@ -17,6 +17,7 @@ import { horizontalScale, verticalScale, ScaleFontSize } from '@/src/core/utils/
 import { useAppDispatch, useAppSelector } from '@/src/shared/store';
 import { selectToken } from '@/src/shared/store/selectors/auth.selectors';
 import { selectWeightData, setWeightData } from '@/src/shared/store/slices/homeSlice';
+import { setProfile } from '@/src/shared/store/slices/profileSlice';
 import { colors, gradients, shadows } from '@/src/core/constants/Theme';
 import { getClientProfile, updateClientProfile, ClientProfileResponse } from '@/src/shared/services/backend/api';
 
@@ -119,10 +120,48 @@ export const WeightCheckin: React.FC<WeightCheckinProps> = ({
 
         try {
             setIsSaving(true);
+            // Persist weight to backend (MongoDB)
             await updateClientProfile({ currentWeight: newWeight }, token || undefined);
+            // Re-fetch from backend to sync both homeSlice and profileSlice
             const profile = await getClientProfile(token || undefined);
             const mappedWeightData = mapProfileToWeightData(profile);
             dispatch(setWeightData(mappedWeightData));
+
+            // Also update profileSlice so the Profile screen reflects the new weight
+            const normalized = (profile as any)?.data && typeof (profile as any).data === 'object'
+                ? (profile as any).data
+                : profile;
+            if (normalized) {
+                const rawHistory = Array.isArray(normalized.weightHistory) ? normalized.weightHistory : [];
+                const currentW = typeof normalized.currentWeight === 'number'
+                    ? normalized.currentWeight
+                    : rawHistory[rawHistory.length - 1]?.weight ?? 0;
+                const startW = typeof normalized.startingWeight === 'number'
+                    ? normalized.startingWeight
+                    : rawHistory[0]?.weight ?? currentW;
+                const targetW = typeof normalized.targetWeight === 'number'
+                    ? normalized.targetWeight
+                    : startW;
+                dispatch(setProfile({
+                    id: normalized._id ?? normalized.id ?? 'unknown',
+                    firstName: normalized.firstName ?? '',
+                    lastName: normalized.lastName ?? '',
+                    email: normalized.email,
+                    phone: normalized.phone,
+                    avatarUrl: normalized.avatarUrl,
+                    gender: normalized.gender === 'female' ? 'female' : 'male',
+                    age: typeof normalized.age === 'number' ? normalized.age : 0,
+                    height: typeof normalized.height === 'number' ? normalized.height : 0,
+                    startWeight: startW,
+                    currentWeight: currentW,
+                    targetWeight: targetW,
+                    weightHistory: rawHistory,
+                    subscriptionStatus: normalized.subscriptionStatus,
+                    dateOfBirth: normalized.dateOfBirth,
+                    createdAt: normalized.createdAt ? new Date(normalized.createdAt).getTime() : Date.now(),
+                    updatedAt: normalized.updatedAt ? new Date(normalized.updatedAt).getTime() : undefined,
+                }));
+            }
 
             setShowSuccess(true);
             Animated.sequence([

@@ -6,11 +6,11 @@
 import { useCallback, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/src/shared/store';
 import {
-    selectActiveConversationId,
-    selectChatSending,
     addOptimisticMessage,
     confirmMessageSent,
     markMessageFailed,
+    selectActiveConversationId,
+    selectChatSending,
 } from '@/src/shared/store/slices/chatSlice';
 import { selectToken, selectUser } from '@/src/shared/store/selectors/auth.selectors';
 import type { Message, MessageType } from '@/src/shared/types/chat';
@@ -19,6 +19,7 @@ import { pickAndCompressImage, takePhoto } from '@/src/shared/utils/media';
 // MongoAudioStorage import removed
 // import MongoAudioStorage from '@/src/shared/services/mongodb/audioStorage';
 import AppwriteStorage from '@/src/shared/services/appwrite/storage';
+import * as DocumentPicker from 'expo-document-picker';
 
 // ============================================================================
 // Types
@@ -32,12 +33,55 @@ export interface UseMessageSendingReturn {
     sendImageMessage: (uri: string, width?: number, height?: number) => Promise<void>;
     sendVoiceMessage: (uri: string, duration: number, meteringValues?: number[], size?: number) => Promise<void>;
     pickAndSendImage: () => Promise<void>;
+    pickAndSendDocument: () => Promise<void>;
     takeAndSendPhoto: () => Promise<void>;
 }
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+/** Maximum number of retry attempts for upload failures */
+const MAX_RETRIES = 3;
+
+/** Base delay for exponential backoff (in ms) */
+const BASE_DELAY = 1000;
+
+/**
+ * Sleep for specified milliseconds
+ */
+const sleep = (ms: number): Promise<void> =>
+    new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Retry a function with exponential backoff
+ * @param fn - Async function to retry
+ * @param maxRetries - Maximum number of retries
+ * @param baseDelay - Base delay in ms (doubles each retry)
+ */
+async function withRetry<T>(
+    fn: () => Promise<T>,
+    maxRetries: number = MAX_RETRIES,
+    baseDelay: number = BASE_DELAY
+): Promise<T> {
+    let lastError: Error | undefined;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            return await fn();
+        } catch (error) {
+            lastError = error instanceof Error ? error : new Error(String(error));
+
+            if (attempt < maxRetries) {
+                const delay = baseDelay * Math.pow(2, attempt);
+                console.log(`[withRetry] Attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
+                await sleep(delay);
+            }
+        }
+    }
+
+    throw lastError;
+}
 
 const generateTempId = (): string =>
     `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -58,6 +102,7 @@ const createOptimisticMessageData = (input: {
     return {
         id: tempId,
         tempId,
+        clientTempId: tempId,
         conversationId: input.conversationId,
         content: input.content,
         messageType: input.messageType,
@@ -131,6 +176,7 @@ export function useMessageSending(): UseMessageSendingReturn {
                     replyToId: options?.replyToId,
                     meteringValues: options?.meteringValues,
                     voiceMessage: options?.voiceMessage,
+                    clientTempId: optimisticMessage.tempId,
                 },
                 token
             );
@@ -146,6 +192,7 @@ export function useMessageSending(): UseMessageSendingReturn {
                     mediaUrl: response.data.mediaUrl || options?.mediaUrl,
                     mediaDuration: response.data.mediaDuration || options?.mediaDuration,
                     meteringValues: response.data.meteringValues || options?.meteringValues,
+                    clientTempId: response.data.clientTempId || optimisticMessage.tempId,
                     createdAt: response.data.createdAt || optimisticMessage.createdAt,
                     status: 'sent',
                     isRead: false,
@@ -208,7 +255,8 @@ export function useMessageSending(): UseMessageSendingReturn {
     }, [sendMessage]);
 
     /**
-     * Send voice message
+     * Send voice message with optimistic update
+     * Shows message immediately while uploading in background
      */
     const sendVoiceMessage = useCallback(async (
         uri: string,
@@ -216,44 +264,122 @@ export function useMessageSending(): UseMessageSendingReturn {
         meteringValues?: number[],
         size?: number
     ): Promise<void> => {
+        if (!conversationId || !token || !user?._id) {
+            console.error('[useMessageSending] Missing conversationId, token, or user for voice message');
+            return;
+        }
+
         setLocalSending(true);
+
+        // Create optimistic message immediately (before upload)
+        const optimisticMessage = createOptimisticMessageData({
+            content: '🎤 Voice message',
+            messageType: 'voice',
+            conversationId,
+            senderId: user._id,
+            mediaUrl: uri, // Use local URI initially for immediate display
+            mediaDuration: duration,
+            meteringValues: meteringValues,
+        });
+
+        // Show in UI immediately
+        dispatch(addOptimisticMessage(optimisticMessage));
+
         try {
-            // Upload voice message to Backend (GridFS)
-            const uploadResult = await uploadVoiceMessage(uri, duration, token || undefined);
+            // Upload voice message to Backend (GridFS) with retry logic
+            const uploadResult = await withRetry(
+                () => uploadVoiceMessage(uri, duration, token),
+                MAX_RETRIES,
+                BASE_DELAY
+            );
 
             if (!uploadResult.success || !uploadResult.url) {
                 console.error('Failed to upload voice message:', uploadResult.error);
+                dispatch(markMessageFailed(optimisticMessage.tempId!));
                 return;
             }
 
-            await sendMessage('voice', '🎤 Voice message', {
-                mediaUrl: uploadResult.url,
-                mediaDuration: duration,
-                meteringValues: meteringValues,
-                // Pass the full voiceMessage object if your backend expects it in a specific field
-                // Based on our chat.controller.ts, we should pass it as part of the message body
-                // which sendMessage handles via "options" if we expand it, 
-                // BUT sendMessage currently only takes specific options.
-                // Let's check sendMessage signature below.
-            });
-            // HACK: We need to pass voiceMessage to sendMessage, but sendMessage interface might need update.
-            // Let's update sendChatMessage call inside sendMessage instead (if possible) 
-            // OR simpler: valid mediaUrl is enough for playback. 
-            // The backend upload-voice returns 'url' which is the stream endpoint.
-            // So mediaUrl being set is sufficient for the current frontend.
-            // However, to store the `voiceMessage` object in DB as requested, we need to pass it.
+            // Send message to server with uploaded URL
+            const response = await sendChatMessage(
+                conversationId,
+                {
+                    content: '🎤 Voice message',
+                    messageType: 'voice',
+                    mediaUrl: uploadResult.url,
+                    mediaDuration: duration,
+                    meteringValues: meteringValues,
+                    voiceMessage: uploadResult.voiceMessage,
+                    clientTempId: optimisticMessage.tempId,
+                },
+                token
+            );
 
-            // To fix this properly, I should update sendMessage signature in useMessageSending.ts 
-            // AND sendChatMessage in api.ts to accept voiceMessage.
-            // But since I can't easily change sendMessage signature without affect other calls...
-            // Wait, sendMessage implementation takes `options`. I can add `voiceMessage` to options.
+            if (response.success && response.data) {
+                const confirmedMessage: Message = {
+                    id: response.data._id || optimisticMessage.id,
+                    conversationId: response.data.conversationId || conversationId,
+                    senderId: response.data.senderId || user._id,
+                    content: response.data.content || '🎤 Voice message',
+                    messageType: 'voice',
+                    mediaUrl: response.data.mediaUrl || uploadResult.url,
+                    mediaDuration: response.data.mediaDuration || duration,
+                    meteringValues: response.data.meteringValues || meteringValues,
+                    createdAt: response.data.createdAt || optimisticMessage.createdAt,
+                    status: 'sent',
+                    isRead: false,
+                    isOptimistic: false,
+                };
 
+                dispatch(confirmMessageSent({
+                    tempId: optimisticMessage.tempId!,
+                    message: confirmedMessage,
+                }));
+            } else {
+                throw new Error(response.message || 'Failed to send voice message');
+            }
         } catch (error) {
             console.error('Error sending voice message:', error);
+            dispatch(markMessageFailed(optimisticMessage.tempId!));
         } finally {
             setLocalSending(false);
         }
-    }, [sendMessage, token]);
+    }, [conversationId, token, user?._id, dispatch]);
+
+    /**
+     * Pick document and send
+     */
+    const pickAndSendDocument = useCallback(async (): Promise<void> => {
+        setLocalSending(true);
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+                copyToCacheDirectory: true,
+            });
+
+            if (result.canceled || !result.assets || result.assets.length === 0) {
+                return;
+            }
+
+            const asset = result.assets[0];
+
+            // Upload document
+            const uploadResult = await AppwriteStorage.uploadFile(asset.uri, asset.name, asset.mimeType, asset.size);
+
+            if (!uploadResult.success || !uploadResult.url) {
+                console.error('Failed to upload document:', uploadResult.error);
+                return;
+            }
+
+            await sendMessage('document', asset.name, {
+                mediaUrl: uploadResult.url,
+            });
+
+        } catch (error) {
+            console.error('Error sending document:', error);
+        } finally {
+            setLocalSending(false);
+        }
+    }, [sendMessage]);
 
     /**
      * Pick image from library and send
@@ -291,6 +417,7 @@ export function useMessageSending(): UseMessageSendingReturn {
         sendImageMessage,
         sendVoiceMessage,
         pickAndSendImage,
+        pickAndSendDocument,
         takeAndSendPhoto,
     };
 }
