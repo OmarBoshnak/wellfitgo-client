@@ -4,6 +4,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { NotificationItemProps } from './types';
 
 const NotificationItem: React.FC<NotificationItemProps> = ({ notification, onPress }) => {
+  const formatTime = (value: string) => {
+    if (!value.includes(':')) return value;
+
+    const timeMatch = value.match(/^\d{1,2}:\d{2}:\d{2}/);
+    if (!timeMatch) return value;
+
+    const [hours, minutes] = timeMatch[0].split(':');
+    return value.replace(timeMatch[0], `${hours}:${minutes}`);
+  };
   const getAvatarSource = () => {
     if (notification.avatar) {
       return { uri: notification.avatar };
@@ -54,9 +63,12 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification, onPre
     >
 
             {/* Time */}
-      <Text style={styles.time}>
-        {notification.time}
-      </Text>
+      <View style={styles.timeContainer}>
+        {!notification.isRead && <View style={styles.unreadDot} />}
+        <Text style={styles.time}>
+          {formatTime(notification.time)}
+        </Text>
+      </View>
 
 
 
@@ -134,10 +146,21 @@ const styles = StyleSheet.create({
     textAlign:'right',
     overflow:'hidden',
   },
+  timeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 12,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#2563EB',
+    marginRight: 6,
+  },
   time: {
     fontSize: 12,
     color: '#9CA3AF',
-    marginLeft: 12,
     alignSelf: 'center',
     marginTop: 2,
   },

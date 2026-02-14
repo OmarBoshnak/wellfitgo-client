@@ -159,7 +159,7 @@ export default function ChatScreen() {
                     fullName: resolvedName,
                     avatarUrl: summaryDoctor.avatarUrl || conversationData?.avatar || undefined,
                     specialization: undefined,
-                    isOnline: false,
+                    isOnline: conversationData?.isOnline ?? false,
                 }));
             } catch (error) {
                 console.error('[Chat] Failed to load doctor data:', error);
@@ -200,7 +200,7 @@ export default function ChatScreen() {
         };
 
         loadAvailability();
-        intervalId = setInterval(loadAvailability, 60000);
+        intervalId = setInterval(loadAvailability, 15000);
 
         return () => {
             isMounted = false;

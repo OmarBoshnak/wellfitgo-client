@@ -20,8 +20,9 @@ import {
     OnboardingSlide,
 } from '@/src/shared/components/onboarding';
 import { useAppDispatch } from '@/src/shared/store';
-import { completeOnboarding } from '@/src/shared/store/slices/authSlice';
+import { completeOnboarding, resetAuth } from '@/src/shared/store/slices/authSlice';
 import * as asyncStorage from '@/src/shared/services/storage/asyncStorage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { iso } from 'zod';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -62,11 +63,17 @@ export default function OnBoardingScreen() {
         setCurrentSlideIndex(index);
     }, []);
 
-    // Mark onboarding as complete in storage
+    // Mark onboarding as complete in storage and clear any stale auth data
     const markOnboardingComplete = async () => {
         try {
             await asyncStorage.setOnboardingCompleted();
             dispatch(completeOnboarding());
+
+            // Clear any stale auth tokens so AuthStateListener doesn't
+            // redirect to health-history before showing the login screen
+            await AsyncStorage.removeItem('token');
+            await AsyncStorage.removeItem('user');
+            dispatch(resetAuth());
         } catch (error) {
             console.error('Failed to save onboarding completion:', error);
         }
@@ -79,7 +86,7 @@ export default function OnBoardingScreen() {
             <StatusBar barStyle="dark-content" backgroundColor={colors.bgPrimary} />
 
             {/* Skip button - Top of screen */}
-            <View style={[styles.skipContainer,{top: Platform.OS === 'ios' ? verticalScale(45) : verticalScale(30)}]}>
+            <View style={[styles.skipContainer, { top: Platform.OS === 'ios' ? verticalScale(45) : verticalScale(30) }]}>
                 <TouchableOpacity
                     style={styles.skipButtonTop}
                     onPress={handleSkip}

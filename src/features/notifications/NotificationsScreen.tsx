@@ -1,7 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, StyleSheet, StatusBar, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import NotificationItem from './NotificationItem';
@@ -12,20 +11,16 @@ const NotificationsScreen: React.FC = () => {
   const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
   const router = useRouter();
 
-  // Mark notifications as read when screen is focused
-  useFocusEffect(
-    useCallback(() => {
-      setNotifications(prev => 
-        prev.map(notification => ({ ...notification, isRead: true }))
-      );
-    }, [])
-  );
-
   const handleBackPress = useCallback(() => {
     router.back();
   }, [router]);
 
   const handleNotificationPress = useCallback((notification: Notification) => {
+    setNotifications(prev =>
+      prev.map(item =>
+        item.id === notification.id ? { ...item, isRead: true } : item
+      )
+    );
     console.log('Notification pressed:', notification.title);
     // Here you can add navigation logic based on notification type
     // For example, navigate to appointment details, chat screen, etc.
@@ -39,20 +34,6 @@ const NotificationsScreen: React.FC = () => {
   ), [handleNotificationPress]);
 
   const keyExtractor = useCallback((item: Notification) => item.id, []);
-
-  const ListHeaderComponent = useCallback(() => (
-    <View style={styles.header}>
-      <Text style={styles.headerTitle}>Notifications</Text>
-    </View>
-  ), []) as React.FC<{}>;
-
-  const ListEmptyComponent = useCallback(() => (
-    <View style={styles.emptyContainer}>
-      <Ionicons name="notifications-off-outline" size={48} color="#9CA3AF" />
-      <Text style={styles.emptyTitle}>No Notifications</Text>
-      <Text style={styles.emptyMessage}>You're all caught up!</Text>
-    </View>
-  ), []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -69,7 +50,7 @@ const NotificationsScreen: React.FC = () => {
         <View style={styles.emptyContainer}>
           <Ionicons name="notifications-off-outline" size={48} color="#9CA3AF" />
           <Text style={styles.emptyTitle}>No Notifications</Text>
-          <Text style={styles.emptyMessage}>You're all caught up!</Text>
+          <Text style={styles.emptyMessage}>You are all caught up!</Text>
         </View>
       ) : (
         <FlatList
